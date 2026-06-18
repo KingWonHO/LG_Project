@@ -1,0 +1,37 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# --- 가상환경 ---
+.venv/
+venv/
+env/
+
+# --- 환경 변수 (비밀값) ---
+.env
+
+# --- 데이터/산출물 (실데이터는 커밋 금지) ---
+data/uploads/*
+data/reports/*
+data/chroma/
+*.db
+*.sqlite3
+!data/uploads/.gitkeep
+!data/reports/.gitkeep
+
+# --- 모델 캐시 ---
+.cache/
+models/
+
+# --- IDE / OS ---
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# --- Streamlit ---
+.streamlit/secrets.toml

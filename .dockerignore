@@ -1,0 +1,14 @@
+.git
+.venv
+venv
+__pycache__
+*.pyc
+.env
+data/uploads/*
+data/reports/*
+data/chroma
+*.db
+*.sqlite3
+.idea
+.vscode
+docs

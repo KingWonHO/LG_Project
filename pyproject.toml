@@ -1,0 +1,43 @@
+[project]
+name = "lg-project"
+version = "0.1.0"
+description = "LG Comp 확인 에이전트 - 압축기 데이터 분석/판정/리포트 (LGE Internal)"
+readme = "README.md"
+requires-python = ">=3.11"
+
+dependencies = [
+    # UI / 웹
+    "streamlit>=1.40,<2.0",
+    # 데이터 처리
+    "pandas>=2.2",
+    "numpy>=1.26",
+    "openpyxl>=3.1",
+    # 시각화
+    "plotly>=5.24",
+    # DB (SQLite 기본 / PostgreSQL 전환 가능)
+    "SQLAlchemy>=2.0",
+    # RAG (로컬 벡터DB + 로컬 임베딩)
+    "chromadb>=0.5",
+    "sentence-transformers>=3.0",
+    # LLM (사내/로컬 모델 HTTP 호출)
+    "httpx>=0.27",
+    # 리포트 생성
+    "jinja2>=3.1",
+    "weasyprint>=62",
+    # 설정/환경
+    "pydantic-settings>=2.4",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+# PostgreSQL 전환 시: uv sync --extra postgres
+postgres = ["psycopg2-binary>=2.9"]
+# 개발 도구
+dev = ["ruff>=0.6", "pytest>=8.0"]
+
+[tool.uv]
+# uv 전용 설정 (필요 시 추가)
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
