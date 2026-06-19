@@ -28,3 +28,11 @@ def parse_csv(content: bytes) -> pd.DataFrame:
         except Exception as exc:
             raise FileParseError(f"CSV 파싱 실패: {exc}") from exc
     raise FileParseError("CSV 인코딩을 인식할 수 없습니다 (utf-8-sig, cp949 시도 실패).")
+
+
+def parse_excel(content: bytes) -> pd.DataFrame:
+    """XLSX 바이트 데이터를 DataFrame으로 변환한다 (첫 번째 시트 사용)."""
+    try:
+        return pd.read_excel(BytesIO(content), sheet_name=0, engine="openpyxl")
+    except Exception as exc:
+        raise FileParseError(f"XLSX 파싱 실패: {exc}") from exc
