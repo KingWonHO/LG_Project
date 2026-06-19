@@ -17,3 +17,20 @@ STANDARD_COLUMN_ALIASES: dict[str, list[str]] = {
     "Initial_Delay": ["initial_delay", "initialdelay", "initial delay"],
     "RT": ["rt"],
 }
+
+
+def _normalize(name: str) -> str:
+    """컬럼명 비교를 위해 정규화한다 (소문자, 공백/언더스코어/하이픈 제거)."""
+    return name.strip().lower().replace(" ", "").replace("_", "").replace("-", "")
+
+
+_ALIAS_TO_STANDARD: dict[str, str] = {
+    _normalize(alias): standard
+    for standard, aliases in STANDARD_COLUMN_ALIASES.items()
+    for alias in aliases
+}
+
+
+def map_column_name(raw_name: str) -> str:
+    """원본 컬럼명을 표준 컬럼명으로 매핑한다. 매칭되는 표준 컬럼이 없으면 원본을 그대로 반환한다."""
+    return _ALIAS_TO_STANDARD.get(_normalize(raw_name), raw_name)
