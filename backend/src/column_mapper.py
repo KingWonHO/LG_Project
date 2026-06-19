@@ -51,7 +51,7 @@ STANDARD_COLUMN_ALIASES: dict[str, list[str]] = {
     "Initial_Delay": ["initial_delay", "initialdelay", "initial delay", "initial_del"],
     "CoolingPower": ["coolingpower", "cooling_power", "cooling power", "coolingpc"],
     "OnOffByte": ["onoffbyte", "onoff_byte", "onoff byte"],
-    "Open_Loop": ["open_loop", "open loop", "open_loo", "open loo"],
+    "Open_Loop": ["open_loop", "open loop", "open_loo", "open loo", "open_loop_step", "open loop step"],
     "PGM_Ver": ["pgm_ver", "pgm ver"],
     "DC_Link": ["dc_link", "dc link"],
     "First": ["first"],
