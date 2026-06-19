@@ -1,47 +1,51 @@
-"""사용자 분석 페이지.
+"""사용자 분석 페이지 — UI 목업.
 
-와이어프레임 기준 레이아웃:
+※ 프론트 목업 단계: 백엔드(src/*) 모듈을 호출하지 않고 더미 데이터로
+   화면 레이아웃과 인터랙션만 구성한다. 실제 분석 로직 연동은 추후.
+
+레이아웃(와이어프레임 기준):
 - 상단 탭: [분석] / [학습]
-- 왼쪽 영역: CSV 업로드 → (실행버튼 | 컴프/전압/RT 드롭 + 컬럼선택) → 그래프
-- 오른쪽 영역: 평압/차압 → Pass/Fail → 분석결과 → 리포트 출력
-
-NOTE: src 모듈 연동부는 아래 `# TODO(src)` 주석 지점에 실제 함수를 연결하세요.
-실제 구현 전에도 단독 실행되도록 안전한 placeholder로 작성되어 있습니다.
+- 좌측: CSV 업로드 → (실행버튼 | 컴프/전압/RT 드롭 + 컬럼선택) → 그래프
+- 우측: 평압/차압 → Pass/Fail → 분석결과 → 리포트 출력
 """
 
 from __future__ import annotations
 
-import streamlit as st
+import numpy as np
 import pandas as pd
+import streamlit as st
+import plotly.graph_objects as go
+
+# 목업용 가짜 Trip 발생 구간 (그래프 하이라이트 데모)
+MOCK_TRIP_RANGE = (150, 172)
+
 
 # ----------------------------------------------------------------------------
-# src 모듈 import (구현 전에는 ImportError 무시하고 placeholder 사용)
+# 목업 데이터 / 상태
 # ----------------------------------------------------------------------------
-try:
-    from src import (
-        file_parser,
-        column_mapper,
-        trip_analyzer,
-        verdict_engine,
-        result_builder,
-        chart_viewer,
-        report_generator,
+def _mock_timeseries(n: int = 300) -> pd.DataFrame:
+    t = np.arange(n)
+    rng = np.random.default_rng(42)
+    comp = 50 + 5 * np.sin(t / 15) + rng.normal(0, 0.6, n)
+    volt = 220 + 3 * np.sin(t / 40) + rng.normal(0, 1.0, n)
+    rt = 25 + 2 * np.sin(t / 50) + rng.normal(0, 0.3, n)
+    # 가짜 Trip 구간 (이상치 주입)
+    a, b = MOCK_TRIP_RANGE
+    comp[a:b] += 18
+    return pd.DataFrame({"Time": t, "컴프전류": comp, "전압": volt, "RT": rt})
+
+
+def _mock_result() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "항목": ["Trip 발생", "baseline 이탈", "데이터 품질", "최종 판정"],
+            "결과": ["3회 (구간 150~172)", "CoolingPower 초과", "이상치 2건", "관리필요"],
+        }
     )
-except Exception:  # 모듈 미구현 단계에서도 페이지가 뜨도록
-    file_parser = column_mapper = trip_analyzer = None
-    verdict_engine = result_builder = chart_viewer = report_generator = None
 
 
-# ----------------------------------------------------------------------------
-# 세션 상태 초기화
-# ----------------------------------------------------------------------------
 def _init_state() -> None:
-    defaults = {
-        "raw_df": None,         # 업로드된 원본 DataFrame
-        "analysis_result": None,  # 분석 결과 객체
-        "verdict": None,        # Pass/Fail 판정
-        "report_bytes": None,   # 생성된 리포트 파일 바이트
-    }
+    defaults = {"raw_df": None, "analysis_result": None, "verdict": None, "report_bytes": None}
     for key, value in defaults.items():
         st.session_state.setdefault(key, value)
 
@@ -52,81 +56,90 @@ def _init_state() -> None:
 def _render_analysis_tab() -> None:
     left, right = st.columns([3, 2], gap="medium")
 
-    # ===================== 왼쪽 영역 =====================
+    # ===================== 좌측 =====================
     with left:
         # --- CSV 파일 업로드 ---
         st.subheader("CSV 파일 업로드")
-        uploaded = st.file_uploader(
-            "분석할 CSV 파일을 올려주세요",
-            type=["csv"],
-            label_visibility="collapsed",
-        )
+        up_col, sample_col = st.columns([3, 1])
+        with up_col:
+            uploaded = st.file_uploader(
+                "분석할 CSV/XLSX 파일", type=["csv", "xlsx"], label_visibility="collapsed"
+            )
+        with sample_col:
+            if st.button("샘플 불러오기", use_container_width=True):
+                st.session_state.raw_df = _mock_timeseries()
+
         if uploaded is not None:
             try:
-                if file_parser is not None:
-                    st.session_state.raw_df = file_parser.parse(uploaded)  # TODO(src)
+                # 목업: 미리보기용 직접 읽기 (실제 파싱은 추후 file_parser 연동)
+                if uploaded.name.endswith(".xlsx"):
+                    st.session_state.raw_df = pd.read_excel(uploaded)
                 else:
                     st.session_state.raw_df = pd.read_csv(uploaded)
-                st.success(f"불러온 행 수: {len(st.session_state.raw_df):,}")
             except Exception as e:
-                st.error(f"파일 파싱 실패: {e}")
+                st.error(f"미리보기 실패: {e}")
+
+        df = st.session_state.raw_df
+        if df is not None:
+            st.caption(f"불러온 행 수: {len(df):,}  ·  컬럼: {len(df.columns)}")
 
         st.divider()
 
         # --- 실행버튼 | 드롭다운 + 컬럼선택 ---
         run_col, opt_col = st.columns([1, 2], gap="small")
-
         with run_col:
             run = st.button("실행", type="primary", use_container_width=True)
-
         with opt_col:
             d1, d2, d3 = st.columns(3)
-            comp = d1.selectbox("컴프", ["전체", "ON", "OFF"], key="comp_sel")
-            volt = d2.selectbox("전압", ["전체", "정격", "저전압", "고전압"], key="volt_sel")
-            rt = d3.selectbox("RT", ["전체", "RT1", "RT2", "RT3"], key="rt_sel")
+            d1.selectbox("컴프", ["전체", "ON", "OFF"], key="comp_sel")
+            d2.selectbox("전압", ["전체", "정격", "저전압", "고전압"], key="volt_sel")
+            d3.selectbox("RT", ["전체", "RT1", "RT2", "RT3"], key="rt_sel")
 
-            df = st.session_state.raw_df
             col_options = list(df.columns) if df is not None else []
-            selected_cols = st.multiselect(
+            st.multiselect(
                 "컬럼선택",
                 options=col_options,
-                default=col_options[: min(3, len(col_options))],
+                default=[c for c in ["컴프전류", "전압"] if c in col_options],
                 key="col_sel",
             )
 
-        # --- 실행 로직 ---
         if run:
-            _run_analysis(comp, volt, rt, selected_cols)
+            if df is None:
+                st.warning("먼저 파일을 업로드하거나 '샘플 불러오기'를 누르세요.")
+            else:
+                # 목업: 고정된 더미 결과 생성
+                st.session_state.analysis_result = _mock_result()
+                st.session_state.verdict = "관리필요"
+                st.success("분석 완료 (목업 결과)")
 
         st.divider()
 
         # --- 그래프 ---
         st.subheader("그래프")
-        result = st.session_state.analysis_result
-        if result is None:
-            st.info("실행 버튼을 누르면 그래프가 표시됩니다.")
+        if df is None:
+            st.info("실행 전: 파일 업로드 후 그래프가 표시됩니다.")
         else:
-            if chart_viewer is not None:
-                chart_viewer.render(result)  # TODO(src)
-            else:
-                df = st.session_state.raw_df
-                cols = st.session_state.get("col_sel") or []
-                if df is not None and cols:
-                    st.line_chart(df[cols])
-                else:
-                    st.info("표시할 데이터/컬럼이 없습니다.")
+            cols = st.session_state.get("col_sel") or [c for c in df.columns if c != "Time"]
+            x = df["Time"] if "Time" in df.columns else df.index
+            fig = go.Figure()
+            for c in cols:
+                if c in df.columns and c != "Time":
+                    fig.add_trace(go.Scatter(x=x, y=df[c], mode="lines", name=c))
+            # 이상 구간(USR-006) 하이라이트 — 목업
+            if st.session_state.verdict is not None:
+                a, b = MOCK_TRIP_RANGE
+                fig.add_vrect(x0=a, x1=b, fillcolor="red", opacity=0.15,
+                              line_width=0, annotation_text="Trip 구간")
+            fig.update_layout(height=360, margin=dict(l=10, r=10, t=30, b=10),
+                              legend=dict(orientation="h"))
+            st.plotly_chart(fig, use_container_width=True)
 
-    # ===================== 오른쪽 영역 =====================
+    # ===================== 우측 =====================
     with right:
         # --- 평압/차압 ---
         st.subheader("평압 / 차압")
-        mode = st.radio(
-            "분석 모드",
-            ["평압", "차압"],
-            horizontal=True,
-            label_visibility="collapsed",
-            key="pressure_mode",
-        )
+        st.radio("분석 모드", ["평압", "차압"], horizontal=True,
+                 label_visibility="collapsed", key="pressure_mode")
 
         # --- Pass / Fail ---
         verdict = st.session_state.verdict
@@ -134,6 +147,8 @@ def _render_analysis_tab() -> None:
             st.success("PASS")
         elif verdict == "FAIL":
             st.error("FAIL")
+        elif verdict == "관리필요":
+            st.warning("관리필요")
         else:
             st.metric("Pass / Fail", "-")
 
@@ -144,18 +159,19 @@ def _render_analysis_tab() -> None:
         result = st.session_state.analysis_result
         if result is None:
             st.caption("아직 분석 결과가 없습니다.")
-        elif isinstance(result, pd.DataFrame):
-            st.dataframe(result, use_container_width=True)
         else:
-            st.write(result)
+            st.dataframe(result, use_container_width=True, hide_index=True)
 
         st.divider()
 
         # --- 리포트 출력 ---
         st.subheader("리포트 출력")
-        gen = st.button("리포트 생성", use_container_width=True)
-        if gen:
-            _generate_report()
+        if st.button("리포트 생성", use_container_width=True):
+            if result is None:
+                st.warning("먼저 분석을 실행하세요.")
+            else:
+                st.session_state.report_bytes = b"%PDF-1.4 mockup report"
+                st.success("리포트 생성 완료 (목업)")
         if st.session_state.report_bytes is not None:
             st.download_button(
                 "리포트 다운로드",
@@ -165,63 +181,19 @@ def _render_analysis_tab() -> None:
             )
 
 
-def _run_analysis(comp, volt, rt, selected_cols) -> None:
-    """실행 버튼 핸들러."""
-    df = st.session_state.raw_df
-    if df is None:
-        st.warning("먼저 CSV 파일을 업로드하세요.")
-        return
-
-    options = {"comp": comp, "volt": volt, "rt": rt, "columns": selected_cols,
-               "mode": st.session_state.get("pressure_mode", "평압")}
-
-    try:
-        if trip_analyzer is not None and result_builder is not None:
-            analysis = trip_analyzer.analyze(df, options)        # TODO(src)
-            st.session_state.analysis_result = result_builder.build(analysis)  # TODO(src)
-            if verdict_engine is not None:
-                st.session_state.verdict = verdict_engine.judge(analysis)      # TODO(src)
-        else:
-            # placeholder: 선택 컬럼 요약 통계
-            cols = selected_cols or list(df.columns)
-            st.session_state.analysis_result = df[cols].describe()
-            st.session_state.verdict = "PASS"
-        st.success("분석 완료")
-    except Exception as e:
-        st.error(f"분석 실패: {e}")
-
-
-def _generate_report() -> None:
-    """리포트 생성 핸들러."""
-    result = st.session_state.analysis_result
-    if result is None:
-        st.warning("먼저 분석을 실행하세요.")
-        return
-    try:
-        if report_generator is not None:
-            st.session_state.report_bytes = report_generator.generate(result)  # TODO(src)
-        else:
-            st.session_state.report_bytes = b"placeholder report"
-        st.success("리포트 생성 완료")
-    except Exception as e:
-        st.error(f"리포트 생성 실패: {e}")
-
-
 # ----------------------------------------------------------------------------
 # 학습 탭
 # ----------------------------------------------------------------------------
 def _render_learning_tab() -> None:
     st.subheader("학습")
-    st.info("학습 기능은 추후 구현 예정입니다. (baseline_manager / rule_manager 연동)")
+    st.info("학습 기능은 목업 단계입니다. (추후 baseline/rule 학습 연동 예정)")
 
 
 # ----------------------------------------------------------------------------
-# 엔트리
+# 엔트리 (set_page_config 는 app.py 에서 호출)
 # ----------------------------------------------------------------------------
 def main() -> None:
-    st.set_page_config(page_title="사용자 분석", layout="wide")
     _init_state()
-
     tab_analysis, tab_learning = st.tabs(["분석", "학습"])
     with tab_analysis:
         _render_analysis_tab()
@@ -229,5 +201,4 @@ def main() -> None:
         _render_learning_tab()
 
 
-# Streamlit 멀티페이지에서 pages/ 하위 파일은 페이지 진입 시 실행됩니다.
 main()

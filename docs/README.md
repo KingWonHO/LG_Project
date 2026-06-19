@@ -11,6 +11,7 @@
 | [functional_spec.md](./functional_spec.md) | 기능 명세서 (전체 기능 ID / 코드 구현 매핑) |
 | [frontend_spec.md](./frontend_spec.md) | 프론트엔드 명세서 (Streamlit 화면/UI 계층) |
 | [backend_spec.md](./backend_spec.md) | 백엔드 명세서 (src 로직·DB·RAG·LLM 계층) |
+| [git_workflow.md](./git_workflow.md) | Git 협업 워크플로 (브랜치·PR·머지 순서) |
 
 ## 배포 방향
 
@@ -78,8 +79,8 @@
 
 ### 관리 기능 (ADM)
 
-- ⬜ ADM-001 사용자/엔지니어 화면 분리 — `app.py`
-- ⬜ ADM-002 분석 이력 조회 — `pages/history.py`
+- ✅ ADM-001 사용자/엔지니어 화면 분리 — `app.py` _(st.navigation 역할별 노출 + 접근코드 게이팅)_
+- 🟨 ADM-002 분석 이력 조회 — `pages/history.py` _(페이지 골격 완료, db_manager 연동 필요)_
 
 ---
 
