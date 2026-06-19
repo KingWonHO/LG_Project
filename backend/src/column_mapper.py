@@ -35,6 +35,26 @@ STANDARD_COLUMN_ALIASES: dict[str, list[str]] = {
     "LQC_Count": ["lqc_count", "lqc count", "lqc_coun", "lqc coun"],
     "추가각": ["추가각"],
     "진각합": ["진각합"],
+    # 출력/온도/펄스/제어 계열
+    "Power": ["power"],
+    "F_Power": ["f_power", "f power"],
+    "R+F_Power": ["r+f_power", "r+f power"],
+    "Pulse_Value": ["pulse_value", "pulse value", "pulse_valu", "pulse valu"],
+    "Comp_Step": ["comp_step", "comp step", "comp_ste", "comp ste"],
+    "Delay_Time": ["delay_time", "delay time", "delay_tim", "delay tim"],
+    "Ramp": ["ramp"],
+    "Ramping": ["ramping"],
+    "Duty": ["duty"],
+    "최적각": ["최적각"],
+    "FW": ["fw"],
+    "Initial_Delay": ["initial_delay", "initialdelay", "initial delay", "initial_del"],
+    "CoolingPower": ["coolingpower", "cooling_power", "cooling power", "coolingpc"],
+    "OnOffByte": ["onoffbyte", "onoff_byte", "onoff byte"],
+    "Open_Loop": ["open_loop", "open loop", "open_loo", "open loo"],
+    "PGM_Ver": ["pgm_ver", "pgm ver"],
+    "DC_Link": ["dc_link", "dc link"],
+    "First": ["first"],
+    "second": ["second"],
 }
 
 
