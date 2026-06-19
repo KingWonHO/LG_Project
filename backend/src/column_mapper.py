@@ -14,10 +14,15 @@ STANDARD_COLUMN_ALIASES: dict[str, list[str]] = {
     "Trip_Code": ["trip_code", "tripcode", "trip code", "트립코드", "트립 코드"],
     "컴프전류": ["컴프전류", "컴프 전류", "comp_current", "compcurrent"],
     "전압": ["전압", "voltage", "volt"],
-    "Iqe": ["iqe"],
-    "CoolingPower": ["coolingpower", "cooling_power", "cooling power"],
-    "Initial_Delay": ["initial_delay", "initialdelay", "initial delay"],
     "RT": ["rt"],
+    # 전류/기준값 계열 (Ide/Iqe 계열) — 정상데이터/관리필요데이터/PCB변경 트립 샘플 기준
+    "Ide": ["ide", "ide(0.01)"],
+    "Iqe": ["iqe"],
+    "Idef": ["idef"],
+    "Iqef": ["iqef"],
+    "Ide_ref": ["ide_ref", "ide ref"],
+    "Iqe_ref": ["iqe_ref", "iqeref", "iqe ref"],
+    "REF": ["ref"],
 }
 
 
