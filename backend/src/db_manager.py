@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import datetime
+from pathlib import Path
 from typing import Generator
 
 from sqlalchemy import (
@@ -204,3 +205,90 @@ def get_analysis_result(file_id: int) -> AnalysisResult | None:
             .order_by(AnalysisResult.created_at.desc())
             .first()
         )
+
+
+# ---------------------------------------------------------------------------
+# DB-003: TripCode 모델
+# ---------------------------------------------------------------------------
+
+
+class TripCode(Base):
+    """Trip Code 정의 (DB-003)."""
+
+    __tablename__ = "trip_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    trip_no: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    trip_key: Mapped[str] = mapped_column(String(100), nullable=False)
+    trip_name_ko: Mapped[str] = mapped_column(String(100), nullable=False)
+    summary_ko: Mapped[str] = mapped_column(Text, nullable=False)
+    restart_delay_s: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    solution: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# DB-003: Trip Code CRUD
+# ---------------------------------------------------------------------------
+
+
+def upsert_trip_code(
+    trip_no: int,
+    trip_key: str,
+    trip_name_ko: str,
+    summary_ko: str,
+    restart_delay_s: int | None = None,
+    solution: dict | None = None,
+) -> TripCode:
+    with get_session() as session:
+        existing = session.query(TripCode).filter(TripCode.trip_no == trip_no).first()
+        if existing:
+            existing.trip_key = trip_key
+            existing.trip_name_ko = trip_name_ko
+            existing.summary_ko = summary_ko
+            existing.restart_delay_s = restart_delay_s
+            existing.solution = solution
+            existing.updated_at = datetime.utcnow()
+            session.flush()
+            session.refresh(existing)
+            return existing
+        new = TripCode(
+            trip_no=trip_no,
+            trip_key=trip_key,
+            trip_name_ko=trip_name_ko,
+            summary_ko=summary_ko,
+            restart_delay_s=restart_delay_s,
+            solution=solution,
+        )
+        session.add(new)
+        session.flush()
+        session.refresh(new)
+        return new
+
+
+def get_all_trip_codes() -> list[TripCode]:
+    with get_session() as session:
+        return session.query(TripCode).order_by(TripCode.trip_no).all()
+
+
+def get_trip_code(trip_no: int) -> TripCode | None:
+    with get_session() as session:
+        return session.query(TripCode).filter(TripCode.trip_no == trip_no).first()
+
+
+def seed_trip_codes_from_json(json_path: str | Path) -> int:
+    """Trip_case.json에서 초기 데이터 삽입. 이미 존재하면 upsert. 삽입 건수 반환."""
+    import json
+    data = json.loads(Path(json_path).read_text(encoding="utf-8"))
+    count = 0
+    for trip in data.get("trips", []):
+        upsert_trip_code(
+            trip_no=trip["trip_no"],
+            trip_key=trip["trip_key"],
+            trip_name_ko=trip["trip_name_ko"],
+            summary_ko=trip["summary_ko"],
+            restart_delay_s=trip.get("restart_delay_s"),
+            solution=trip.get("solution"),
+        )
+        count += 1
+    return count
