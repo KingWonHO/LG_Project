@@ -36,3 +36,16 @@ def parse_excel(content: bytes) -> pd.DataFrame:
         return pd.read_excel(BytesIO(content), sheet_name=0, engine="openpyxl")
     except Exception as exc:
         raise FileParseError(f"XLSX 파싱 실패: {exc}") from exc
+
+
+def parse_file(filename: str, content: bytes) -> pd.DataFrame:
+    """파일명 확장자를 기준으로 CSV/XLSX를 분기하여 DataFrame으로 변환한다.
+
+    `main.py`의 `/api/analyze`에서 `UploadFile.filename`, `await file.read()` 결과를 그대로 전달한다.
+    """
+    suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if suffix == "csv":
+        return parse_csv(content)
+    if suffix in ("xlsx", "xls"):
+        return parse_excel(content)
+    raise FileParseError(f"지원하지 않는 파일 형식입니다: .{suffix or '(확장자 없음)'}")
