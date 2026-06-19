@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Generator
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     Float,
     ForeignKey,
@@ -349,3 +350,60 @@ def get_baseline(feature_name: str) -> Baseline | None:
 def get_all_baselines() -> list[Baseline]:
     with get_session() as session:
         return session.query(Baseline).order_by(Baseline.feature_name).all()
+
+
+# ---------------------------------------------------------------------------
+# DB-005: Prompt 모델
+# ---------------------------------------------------------------------------
+
+
+class Prompt(Base):
+    """LLM 리포트용 프롬프트 버전 관리 (DB-005)."""
+
+    __tablename__ = "prompts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    version: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# DB-005: Prompt CRUD
+# ---------------------------------------------------------------------------
+
+
+def save_prompt(version: str, text: str) -> Prompt:
+    """새 버전 저장 및 활성화. 기존 active 프롬프트는 비활성화."""
+    with get_session() as session:
+        session.query(Prompt).filter(Prompt.is_active == True).update({"is_active": False})  # noqa: E712
+        existing = session.query(Prompt).filter(Prompt.version == version).first()
+        if existing:
+            existing.text = text
+            existing.is_active = True
+            existing.created_at = datetime.utcnow()
+            session.flush()
+            session.refresh(existing)
+            return existing
+        new = Prompt(version=version, text=text, is_active=True)
+        session.add(new)
+        session.flush()
+        session.refresh(new)
+        return new
+
+
+def get_latest_prompt() -> Prompt | None:
+    """현재 활성 프롬프트 반환."""
+    with get_session() as session:
+        return (
+            session.query(Prompt)
+            .filter(Prompt.is_active == True)  # noqa: E712
+            .order_by(Prompt.created_at.desc())
+            .first()
+        )
+
+
+def get_prompt_by_version(version: str) -> Prompt | None:
+    with get_session() as session:
+        return session.query(Prompt).filter(Prompt.version == version).first()
