@@ -12,6 +12,7 @@ import pandas as pd
 # 별칭은 정규화(소문자, 공백/언더스코어/하이픈 제거) 후 비교한다.
 STANDARD_COLUMN_ALIASES: dict[str, list[str]] = {
     "Trip_Code": ["trip_code", "tripcode", "trip code", "트립코드", "트립 코드"],
+    "Time": ["time"],
     "컴프전류": ["컴프전류", "컴프 전류", "comp_current", "compcurrent"],
     "전압": ["전압", "voltage", "volt"],
     "RT": ["rt"],
