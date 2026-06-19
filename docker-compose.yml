@@ -1,35 +1,45 @@
 # ============================================================
 # LG_Project 배포 구성
-#   app    : Streamlit 웹앱
-#   ollama : 사내/로컬 LLM 서버
+#   backend  : FastAPI (분석/판정/RAG/리포트)
+#   frontend : React 빌드 → nginx
+#   qwen     : Qwen LLM 서버 (Ollama, OpenAI 호환)
 # 실행: docker compose up -d --build
 # ============================================================
 services:
-  app:
-    build: .
-    container_name: lgproject-app
+  backend:
+    build: ./backend
+    container_name: lgproject-backend
     ports:
-      - "8501:8501"
+      - "8000:8000"
     env_file:
-      - .env
+      - ./backend/.env
     environment:
-      # 컨테이너 간 통신은 서비스명으로
-      - OLLAMA_URL=http://ollama:11434
+      - LLM_BASE_URL=http://qwen:11434/v1
+      - LLM_MODEL=qwen2.5:7b
     volumes:
-      - ./data:/app/data        # 업로드/리포트/벡터DB/SQLite 영속화
+      - ./backend/data:/app/data
     depends_on:
-      - ollama
+      - qwen
     restart: unless-stopped
 
-  ollama:
+  frontend:
+    build: ./frontend
+    container_name: lgproject-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  qwen:
     image: ollama/ollama:latest
-    container_name: lgproject-ollama
+    container_name: lgproject-qwen
     ports:
       - "11434:11434"
     volumes:
-      - ollama_models:/root/.ollama   # 받은 모델 영속화
+      - qwen_models:/root/.ollama
     restart: unless-stopped
-    # GPU 사용 시 아래 주석 해제 (NVIDIA Container Toolkit 필요)
+    # GPU 사용 시 주석 해제 (NVIDIA Container Toolkit 필요)
     # deploy:
     #   resources:
     #     reservations:
@@ -38,18 +48,16 @@ services:
     #           count: all
     #           capabilities: [gpu]
 
-  # PostgreSQL 전환 시 주석 해제하고 .env의 DB_URL 변경
+  # PostgreSQL 전환 시 주석 해제 + backend/.env의 DB_URL 변경
   # db:
   #   image: postgres:16
-  #   container_name: lgproject-db
   #   environment:
   #     POSTGRES_USER: lguser
   #     POSTGRES_PASSWORD: change-me
   #     POSTGRES_DB: lgproject
   #   volumes:
   #     - pg_data:/var/lib/postgresql/data
-  #   restart: unless-stopped
 
 volumes:
-  ollama_models:
+  qwen_models:
   # pg_data:
