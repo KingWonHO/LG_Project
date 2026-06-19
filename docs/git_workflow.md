@@ -43,7 +43,6 @@ git checkout -b feature/wonho-parser
 ## 3. 작업 → 커밋
 
 ```bash
-# 파일 수정 후
 git add -A
 git commit -m "feat: file_parser CSV/XLSX 파싱 구현 (ANA-001)"
 ```
@@ -67,37 +66,34 @@ git push -u origin feature/wonho-parser
 ## 5. Pull Request 생성
 
 1. GitHub 저장소 접속 → 노란 배너 **Compare & pull request** 클릭
-   (또는 Pull requests 탭 → New pull request)
-2. base: `main` ← compare: `feature/wonho-parser` 확인
+2. base: `main` <- compare: `feature/wonho-parser` 확인
 3. 제목/설명 작성 → **Create pull request**
 4. 리뷰어 지정 (메인 소유자)
 5. 승인 1개 이상 받으면 **Merge** 가능 (main 보호 규칙)
+
+> 자기 PR은 자기가 승인할 수 없음. 혼자 작업 중이면 ruleset의 Required approvals를 0으로 두거나 bypass에 본인 추가.
 
 ---
 
 ## 6. 머지 후 정리
 
-PR이 머지되면 로컬 정리하고 다시 main 최신화.
-
 ```bash
 git checkout main
 git pull origin main
-git branch -d feature/wonho-parser          # 로컬 브랜치 삭제
-git push origin --delete feature/wonho-parser  # (선택) 원격 브랜치 삭제
+git branch -d feature/wonho-parser
+git push origin --delete feature/wonho-parser   # (선택) 원격 브랜치 삭제
 ```
 
 ---
 
 ## 7. 작업 중 main이 바뀌었을 때 (동기화)
 
-내 브랜치에서 작업하는 동안 다른 사람이 main에 머지했다면, 최신 main을 내 브랜치에 반영한다.
-
 ```bash
 git checkout main
 git pull origin main
 git checkout feature/wonho-parser
 git merge main          # 또는 git rebase main
-# 충돌 나면 해당 파일 수정 → git add <파일> → git commit (merge) / git rebase --continue
+# 충돌 나면 파일 수정 → git add <파일> → git commit / git rebase --continue
 git push
 ```
 
@@ -106,8 +102,8 @@ git push
 ## 충돌(conflict) 기본 대처
 
 1. 충돌 파일 열면 `<<<<<<<`, `=======`, `>>>>>>>` 표시가 있음
-2. 원하는 내용으로 직접 정리하고 표시 마커 삭제
-3. `git add <파일>` → `git commit` (merge) 또는 `git rebase --continue`
+2. 원하는 내용으로 정리하고 표시 마커 삭제
+3. `git add <파일>` → `git commit` 또는 `git rebase --continue`
 
 > 충돌을 줄이려면: 사람별로 건드리는 파일/폴더를 나누고, 작업 전 항상 main을 pull.
 
@@ -116,24 +112,24 @@ git push
 ## 빠른 치트시트
 
 ```bash
-git status                 # 현재 상태
-git branch                 # 브랜치 목록
-git checkout main          # 브랜치 이동
-git checkout -b feature/x  # 새 브랜치 만들고 이동
+git status
+git branch
+git checkout main
+git checkout -b feature/x
 git add -A && git commit -m "..."
 git push -u origin feature/x
 git pull origin main
-git log --oneline -10      # 최근 커밋 보기
+git log --oneline -10
 ```
 
 ---
 
 ## 황금 규칙
 
-1. **main에서 직접 작업 금지** — 항상 브랜치 만들고 시작
-2. **작업 전 `git pull origin main`** — 최신 상태에서 시작
-3. **PR로만 머지** — 리뷰 후 반영
-4. **작은 단위로 자주 커밋·PR** — 충돌과 리뷰 부담↓
+1. main에서 직접 작업 금지 — 항상 브랜치 만들고 시작
+2. 작업 전 `git pull origin main` — 최신 상태에서 시작
+3. PR로만 머지 — 리뷰 후 반영
+4. 작은 단위로 자주 커밋·PR — 충돌과 리뷰 부담 감소
 
 ---
 
