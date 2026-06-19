@@ -42,9 +42,16 @@ def _is_sequential_index_row(values: list) -> bool:
 
 
 def parse_excel(content: bytes) -> pd.DataFrame:
-    """XLSX 바이트 데이터를 DataFrame으로 변환한다 (첫 번째 시트 사용)."""
+    """XLSX 바이트 데이터를 DataFrame으로 변환한다 (첫 번째 시트 사용).
+
+    1행이 실제 헤더가 아니라 단순 정수 인덱스 나열(0, 1, 2, 3...)이면 2행을 헤더로 사용한다.
+    """
     try:
-        return pd.read_excel(BytesIO(content), sheet_name=0, engine="openpyxl")
+        buffer = BytesIO(content)
+        first_row = pd.read_excel(buffer, sheet_name=0, header=None, nrows=1, engine="openpyxl")
+        header_row = 1 if _is_sequential_index_row(first_row.iloc[0].tolist()) else 0
+        buffer.seek(0)
+        return pd.read_excel(buffer, sheet_name=0, header=header_row, engine="openpyxl")
     except Exception as exc:
         raise FileParseError(f"XLSX 파싱 실패: {exc}") from exc
 
