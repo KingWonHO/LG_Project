@@ -8,8 +8,11 @@ from typing import Generator
 
 from sqlalchemy import (
     DateTime,
+    ForeignKey,
     Integer,
+    JSON,
     String,
+    Text,
     create_engine,
 )
 from sqlalchemy.orm import (
@@ -17,6 +20,7 @@ from sqlalchemy.orm import (
     Mapped,
     Session,
     mapped_column,
+    relationship,
     sessionmaker,
 )
 
@@ -78,6 +82,10 @@ class UploadedFile(Base):
     # pending / processing / done / error
     analysis_status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
 
+    results: Mapped[list[AnalysisResult]] = relationship(
+        "AnalysisResult", back_populates="file", cascade="all, delete-orphan"
+    )
+
 
 # ---------------------------------------------------------------------------
 # DB 초기화
@@ -117,3 +125,82 @@ def update_file_status(file_id: int, status: str) -> None:
 def get_file_info(file_id: int) -> UploadedFile | None:
     with get_session() as session:
         return session.get(UploadedFile, file_id)
+
+
+# ---------------------------------------------------------------------------
+# DB-002: AnalysisResult 모델
+# ---------------------------------------------------------------------------
+
+
+class AnalysisResult(Base):
+    """분석 결과 (DB-002)."""
+
+    __tablename__ = "analysis_results"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    file_id: Mapped[int] = mapped_column(Integer, ForeignKey("uploaded_files.id"), nullable=False)
+    verdict: Mapped[str] = mapped_column(String(20), nullable=False)  # PASS / 관리필요 / FAIL
+    anomalies: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    trip_info: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    report_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    file: Mapped[UploadedFile] = relationship("UploadedFile", back_populates="results")
+
+
+# ---------------------------------------------------------------------------
+# DB-002: 분석 결과 CRUD
+# ---------------------------------------------------------------------------
+
+
+def save_analysis_result(
+    file_id: int,
+    verdict: str,
+    anomalies: dict | None = None,
+    trip_info: dict | None = None,
+    report_text: str | None = None,
+) -> AnalysisResult:
+    with get_session() as session:
+        result = AnalysisResult(
+            file_id=file_id,
+            verdict=verdict,
+            anomalies=anomalies,
+            trip_info=trip_info,
+            report_text=report_text,
+        )
+        session.add(result)
+        session.flush()
+        session.refresh(result)
+        return result
+
+
+def get_analysis_history(limit: int = 50) -> list[dict]:
+    """/api/history 응답용 — main.py가 직접 반환할 수 있는 dict 리스트."""
+    with get_session() as session:
+        rows = (
+            session.query(AnalysisResult, UploadedFile)
+            .join(UploadedFile, AnalysisResult.file_id == UploadedFile.id)
+            .order_by(AnalysisResult.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "일시": r.created_at.strftime("%Y-%m-%d %H:%M"),
+                "파일명": f.filename,
+                "행수": f.row_count,
+                "판정": r.verdict,
+            }
+            for r, f in rows
+        ]
+
+
+def get_analysis_result(file_id: int) -> AnalysisResult | None:
+    """특정 파일의 최신 분석 결과 조회."""
+    with get_session() as session:
+        return (
+            session.query(AnalysisResult)
+            .filter(AnalysisResult.file_id == file_id)
+            .order_by(AnalysisResult.created_at.desc())
+            .first()
+        )
