@@ -14,8 +14,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from src.config import settings
+from src import db_manager
 
 app = FastAPI(title="LG Comp 확인 에이전트 API", version="0.1.0")
+
+
+@app.on_event("startup")
+def on_startup() -> None:
+    db_manager.init_db()
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,10 +62,7 @@ async def analyze(file: UploadFile = File(...)) -> dict:
 # ---------------------------------------------------------------------------
 @app.get("/api/history")
 def history() -> list[dict]:
-    # TODO: db_manager 조회
-    return [
-        {"일시": "2026-06-18 09:12", "파일명": "comp_A_0618.csv", "행수": 1820, "판정": "관리필요"},
-    ]
+    return db_manager.get_analysis_history()
 
 
 # ---------------------------------------------------------------------------

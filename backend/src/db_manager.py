@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
-from typing import Generator
+from typing import Any, Generator
 
 from sqlalchemy import (
     Boolean,
@@ -407,3 +407,40 @@ def get_latest_prompt() -> Prompt | None:
 def get_prompt_by_version(version: str) -> Prompt | None:
     with get_session() as session:
         return session.query(Prompt).filter(Prompt.version == version).first()
+
+
+# ---------------------------------------------------------------------------
+# ENG-006: 엔지니어 DB 업데이트
+# ---------------------------------------------------------------------------
+
+
+def update_trip_code(trip_no: int, **fields: Any) -> TripCode | None:
+    """엔지니어가 수정한 Trip Code 필드를 DB에 반영."""
+    allowed = {"trip_key", "trip_name_ko", "summary_ko", "restart_delay_s", "solution"}
+    with get_session() as session:
+        tc = session.query(TripCode).filter(TripCode.trip_no == trip_no).first()
+        if not tc:
+            return None
+        for key, val in fields.items():
+            if key in allowed:
+                setattr(tc, key, val)
+        tc.updated_at = datetime.utcnow()
+        session.flush()
+        session.refresh(tc)
+        return tc
+
+
+def update_baseline(feature_name: str, **fields: Any) -> Baseline | None:
+    """엔지니어가 수정한 Baseline 기준값을 DB에 반영."""
+    allowed = {"min_val", "max_val", "unit"}
+    with get_session() as session:
+        bl = session.query(Baseline).filter(Baseline.feature_name == feature_name).first()
+        if not bl:
+            return None
+        for key, val in fields.items():
+            if key in allowed:
+                setattr(bl, key, val)
+        bl.updated_at = datetime.utcnow()
+        session.flush()
+        session.refresh(bl)
+        return bl
