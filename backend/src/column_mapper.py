@@ -23,6 +23,18 @@ STANDARD_COLUMN_ALIASES: dict[str, list[str]] = {
     "Ide_ref": ["ide_ref", "ide ref"],
     "Iqe_ref": ["iqe_ref", "iqeref", "iqe ref"],
     "REF": ["ref"],
+    # Trip/Relay/NC 제어 계열
+    "운전": ["운전"],
+    "Comp_On": ["comp_on", "comp on"],
+    "Relay": ["relay"],
+    "Relay_Flag": ["relay_flag", "relay flag"],
+    "Forced_Drive": ["forced_drive", "forced drive", "forced_dri", "forced dri"],
+    "NC_Min": ["nc_min", "nc min"],
+    "NC_Flag": ["nc_flag", "nc flag"],
+    "NC_Sec": ["nc_sec", "nc sec"],
+    "LQC_Count": ["lqc_count", "lqc count", "lqc_coun", "lqc coun"],
+    "추가각": ["추가각"],
+    "진각합": ["진각합"],
 }
 
 
