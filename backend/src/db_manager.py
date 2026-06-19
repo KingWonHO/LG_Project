@@ -9,6 +9,7 @@ from typing import Generator
 
 from sqlalchemy import (
     DateTime,
+    Float,
     ForeignKey,
     Integer,
     JSON,
@@ -292,3 +293,59 @@ def seed_trip_codes_from_json(json_path: str | Path) -> int:
         )
         count += 1
     return count
+
+
+# ---------------------------------------------------------------------------
+# DB-004: Baseline 모델
+# ---------------------------------------------------------------------------
+
+
+class Baseline(Base):
+    """feature별 정상 기준값 (DB-004)."""
+
+    __tablename__ = "baselines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    feature_name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
+    min_val: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_val: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+# ---------------------------------------------------------------------------
+# DB-004: Baseline CRUD
+# ---------------------------------------------------------------------------
+
+
+def upsert_baseline(
+    feature_name: str,
+    min_val: float | None = None,
+    max_val: float | None = None,
+    unit: str | None = None,
+) -> Baseline:
+    with get_session() as session:
+        existing = session.query(Baseline).filter(Baseline.feature_name == feature_name).first()
+        if existing:
+            existing.min_val = min_val
+            existing.max_val = max_val
+            existing.unit = unit
+            existing.updated_at = datetime.utcnow()
+            session.flush()
+            session.refresh(existing)
+            return existing
+        new = Baseline(feature_name=feature_name, min_val=min_val, max_val=max_val, unit=unit)
+        session.add(new)
+        session.flush()
+        session.refresh(new)
+        return new
+
+
+def get_baseline(feature_name: str) -> Baseline | None:
+    with get_session() as session:
+        return session.query(Baseline).filter(Baseline.feature_name == feature_name).first()
+
+
+def get_all_baselines() -> list[Baseline]:
+    with get_session() as session:
+        return session.query(Baseline).order_by(Baseline.feature_name).all()
