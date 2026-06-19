@@ -30,6 +30,17 @@ def parse_csv(content: bytes) -> pd.DataFrame:
     raise FileParseError("CSV 인코딩을 인식할 수 없습니다 (utf-8-sig, cp949 시도 실패).")
 
 
+def _is_sequential_index_row(values: list) -> bool:
+    """주어진 행이 단순 정수 인덱스 나열(0, 1, 2, 3...)인지 확인한다.
+
+    일부 엑셀 원본은 1행에 컬럼 인덱스 번호가, 실제 헤더는 2행에 있다.
+    """
+    try:
+        return all(int(value) == i for i, value in enumerate(values))
+    except (TypeError, ValueError):
+        return False
+
+
 def parse_excel(content: bytes) -> pd.DataFrame:
     """XLSX 바이트 데이터를 DataFrame으로 변환한다 (첫 번째 시트 사용)."""
     try:
