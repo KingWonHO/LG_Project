@@ -26,7 +26,7 @@ STANDARD_COLUMN_ALIASES: dict[str, list[str]] = {
     "REF": ["ref"],
     # Trip/Relay/NC 제어 계열
     "운전": ["운전"],
-    "Comp_On": ["comp_on", "comp on"],
+    "Comp_On": ["comp_on", "comp on", "comp_on_time", "comp on time"],
     "Relay": ["relay"],
     "Relay_Flag": ["relay_flag", "relay flag"],
     "Forced_Drive": ["forced_drive", "forced drive", "forced_dri", "forced dri"],
