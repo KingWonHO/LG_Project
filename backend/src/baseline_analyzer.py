@@ -25,3 +25,14 @@ def summarize_feature(df: pd.DataFrame, column: str) -> float:
 def is_within_baseline(value: float, baseline_range: dict) -> bool:
     """값이 baseline 허용 범위(min/max) 내에 있는지 확인한다."""
     return baseline_range["min"] <= value <= baseline_range["max"]
+
+
+def find_out_of_range_features(df: pd.DataFrame, baseline: dict[str, dict]) -> list[str]:
+    """baseline에 등록된 항목 중 업로드 데이터의 대표값이 허용 범위를 벗어난 항목명을 찾는다."""
+    out_of_range = []
+    for column, baseline_range in baseline.items():
+        if column not in df.columns:
+            continue
+        if not is_within_baseline(summarize_feature(df, column), baseline_range):
+            out_of_range.append(column)
+    return out_of_range
