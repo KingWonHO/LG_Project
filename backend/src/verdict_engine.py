@@ -18,17 +18,19 @@ NEEDS_ATTENTION = "관리필요"
 FAIL = "FAIL"
 
 # Trip이 이 횟수 이상 반복되면 단순 관리 필요가 아닌 FAIL로 판단한다.
+# 실제 운영 기준값은 rule_manager(ENG-004)의 Rule JSON에서 정해지므로 기본값일 뿐이며,
+# decide_trip_verdict/analyze_verdict 호출 시 fail_threshold로 덮어쓸 수 있다.
 TRIP_FAIL_COUNT_THRESHOLD = 5
 
 
-def decide_trip_verdict(trip: dict) -> str:
+def decide_trip_verdict(trip: dict, fail_threshold: int = TRIP_FAIL_COUNT_THRESHOLD) -> str:
     """Trip 발생 횟수를 기준으로 부분 판정을 내린다.
 
-    ANA-003 결과(count)만 사용한다. 발생 횟수가 많을수록(TRIP_FAIL_COUNT_THRESHOLD 이상)
-    반복적인 보호동작으로 보고 FAIL, 1회 이상이면 관리필요, 0회면 PASS로 본다.
+    ANA-003 결과(count)만 사용한다. 발생 횟수가 fail_threshold 이상이면 반복적인
+    보호동작으로 보고 FAIL, 1회 이상이면 관리필요, 0회면 PASS로 본다.
     """
     count = trip["count"]
-    if count >= TRIP_FAIL_COUNT_THRESHOLD:
+    if count >= fail_threshold:
         return FAIL
     if count > 0:
         return NEEDS_ATTENTION
