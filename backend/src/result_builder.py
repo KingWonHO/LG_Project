@@ -59,7 +59,7 @@ def build_result(
     verdict: dict,
     trip: dict,
     baseline: dict,
-    quality: dict,
+    quality: dict | None = None,
     max_points: int = 500,
 ) -> dict:
     """trip/baseline/quality/verdict 분석 결과와 시계열 데이터를 표준 결과 JSON으로 합친다.
@@ -67,7 +67,11 @@ def build_result(
     verdict/trip/baseline/quality는 각각 verdict_engine.analyze_verdict,
     trip_analyzer.analyze_trip, baseline_analyzer.analyze_baseline,
     data_quality_checker(ANA-005)가 만든 결과 dict를 그대로 전달받는다.
+    data_quality_checker(ANA-005)가 아직 없는 상태에서도 파이프라인이 동작할 수 있도록
+    quality는 선택값이며, 생략하면 품질 이슈가 없는 것으로 간주한다 (verdict_engine과 동일한 패턴).
     """
+    if quality is None:
+        quality = {"missing": 0, "outliers": 0}
     return {
         **verdict,
         "trip": trip,
