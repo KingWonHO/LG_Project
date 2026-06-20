@@ -63,11 +63,22 @@ def combine_verdicts(verdicts: list[str]) -> str:
     return max(verdicts, key=lambda v: _SEVERITY_ORDER[v])
 
 
-def analyze_verdict(trip: dict, baseline: dict, quality: dict) -> dict:
-    """Trip/baseline/품질 결과를 종합하여 최종 판정 결과를 생성한다 (result_builder에서 사용)."""
+def analyze_verdict(
+    trip: dict,
+    baseline: dict,
+    quality: dict | None = None,
+    fail_threshold: int = TRIP_FAIL_COUNT_THRESHOLD,
+) -> dict:
+    """Trip/baseline/품질 결과를 종합하여 최종 판정 결과를 생성한다 (result_builder에서 사용).
+
+    data_quality_checker(ANA-005)가 아직 없는 상태에서도 trip/baseline만으로 동작할 수 있도록
+    quality는 선택값이며, 생략하면 품질 이슈가 없는 것으로 간주한다.
+    """
+    if quality is None:
+        quality = {"missing": 0, "outliers": 0}
     verdict = combine_verdicts(
         [
-            decide_trip_verdict(trip),
+            decide_trip_verdict(trip, fail_threshold=fail_threshold),
             decide_baseline_verdict(baseline),
             decide_quality_verdict(quality),
         ]
