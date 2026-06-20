@@ -24,6 +24,11 @@ app = FastAPI(title="LG Comp 확인 에이전트 API", version="0.1.0")
 @app.on_event("startup")
 def on_startup() -> None:
     db_manager.init_db()
+    # DB-003: Trip Code 초기 데이터 시딩 (최초 1회만)
+    if not db_manager.get_all_trip_codes():
+        seed_path = Path(__file__).parent / "data" / "trip_case.json"
+        if seed_path.exists():
+            db_manager.seed_trip_codes_from_json(seed_path)
 
 app.add_middleware(
     CORSMiddleware,
