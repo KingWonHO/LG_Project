@@ -40,8 +40,11 @@ def build_series(df: pd.DataFrame, columns: list[str], max_points: int = 500) ->
     """차트(USR-005/006)용 시계열 데이터를 생성한다.
 
     표준 컬럼명 Time을 표준 결과 형식의 "time" 키로 변환하고, USR-003에서 사용자가
-    선택한 columns(예: 컴프전류, 전압)만 함께 담는다.
+    선택한 columns(예: 컴프전류, 전압)만 함께 담는다. 컴프레서 모델/PCB에 따라 컬럼 구성이
+    달라 요청한 columns 중 DataFrame에 없는 항목은 baseline_analyzer와 동일하게 조용히
+    건너뛴다 (실제로 포함된 컬럼은 각 series 레코드의 키로 그대로 드러난다).
     """
+    columns = [column for column in columns if column in df.columns]
     indices = _downsample_indices(len(df), max_points)
     subset = df.iloc[indices][["Time", *columns]]
     series = []
