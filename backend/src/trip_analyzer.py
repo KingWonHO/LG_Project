@@ -21,3 +21,15 @@ def count_trip_occurrences(df: pd.DataFrame) -> int:
         return 0
     group_id = (mask != mask.shift()).cumsum()
     return group_id[mask].nunique()
+
+
+def find_trip_ranges(df: pd.DataFrame) -> list[list]:
+    """Trip_Code가 연속으로 0이 아닌 구간별 [시작 Time, 종료 Time]을 계산한다."""
+    mask = detect_trip_mask(df)
+    if not mask.any():
+        return []
+    group_id = (mask != mask.shift()).cumsum()
+    ranges = []
+    for _, group in df[mask].groupby(group_id[mask]):
+        ranges.append([group["Time"].iloc[0].item(), group["Time"].iloc[-1].item()])
+    return ranges
