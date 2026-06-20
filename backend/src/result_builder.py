@@ -29,3 +29,25 @@ def _downsample_indices(n_rows: int, max_points: int) -> list[int]:
         return list(range(n_rows))
     step = n_rows / max_points
     return [int(i * step) for i in range(max_points)]
+
+
+def _to_native(value):
+    """numpy 스칼라(np.int64 등)를 JSON 직렬화 가능한 파이썬 기본 타입으로 변환한다."""
+    return value.item() if hasattr(value, "item") else value
+
+
+def build_series(df: pd.DataFrame, columns: list[str], max_points: int = 500) -> list[dict]:
+    """차트(USR-005/006)용 시계열 데이터를 생성한다.
+
+    표준 컬럼명 Time을 표준 결과 형식의 "time" 키로 변환하고, USR-003에서 사용자가
+    선택한 columns(예: 컴프전류, 전압)만 함께 담는다.
+    """
+    indices = _downsample_indices(len(df), max_points)
+    subset = df.iloc[indices][["Time", *columns]]
+    series = []
+    for row in subset.itertuples(index=False):
+        record = {"time": _to_native(row[0])}
+        for column, value in zip(columns, row[1:]):
+            record[column] = _to_native(value)
+        series.append(record)
+    return series
