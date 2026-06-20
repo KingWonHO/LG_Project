@@ -51,3 +51,11 @@ def decide_quality_verdict(quality: dict) -> str:
     별도로 표시되는 상태이므로, 이 함수는 PASS/관리필요 두 단계만 다룬다.
     """
     return NEEDS_ATTENTION if quality["missing"] > 0 or quality["outliers"] > 0 else PASS
+
+
+_SEVERITY_ORDER = {PASS: 0, NEEDS_ATTENTION: 1, FAIL: 2}
+
+
+def combine_verdicts(verdicts: list[str]) -> str:
+    """여러 부분 판정 중 가장 심각한 단계(PASS < 관리필요 < FAIL)를 최종 판정으로 선택한다."""
+    return max(verdicts, key=lambda v: _SEVERITY_ORDER[v])
