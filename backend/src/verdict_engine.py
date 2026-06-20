@@ -33,3 +33,12 @@ def decide_trip_verdict(trip: dict) -> str:
     if count > 0:
         return NEEDS_ATTENTION
     return PASS
+
+
+def decide_baseline_verdict(baseline: dict) -> str:
+    """baseline 이탈 항목 여부로 부분 판정을 내린다.
+
+    ANA-004 설명("정상 baseline 대비 이탈 → 관리 필요 여부 판단")에 따라
+    baseline 이탈은 FAIL이 아니라 관리필요까지만 영향을 준다.
+    """
+    return NEEDS_ATTENTION if baseline["out_of_range"] else PASS
