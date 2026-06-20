@@ -20,3 +20,8 @@ def summarize_feature(df: pd.DataFrame, column: str) -> float:
     평균보다 median이 정상 운전 시점의 대표값을 더 안정적으로 반영한다.
     """
     return float(df[column].median())
+
+
+def is_within_baseline(value: float, baseline_range: dict) -> bool:
+    """값이 baseline 허용 범위(min/max) 내에 있는지 확인한다."""
+    return baseline_range["min"] <= value <= baseline_range["max"]
