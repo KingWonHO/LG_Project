@@ -59,3 +59,15 @@ _SEVERITY_ORDER = {PASS: 0, NEEDS_ATTENTION: 1, FAIL: 2}
 def combine_verdicts(verdicts: list[str]) -> str:
     """여러 부분 판정 중 가장 심각한 단계(PASS < 관리필요 < FAIL)를 최종 판정으로 선택한다."""
     return max(verdicts, key=lambda v: _SEVERITY_ORDER[v])
+
+
+def analyze_verdict(trip: dict, baseline: dict, quality: dict) -> dict:
+    """Trip/baseline/품질 결과를 종합하여 최종 판정 결과를 생성한다 (result_builder에서 사용)."""
+    verdict = combine_verdicts(
+        [
+            decide_trip_verdict(trip),
+            decide_baseline_verdict(baseline),
+            decide_quality_verdict(quality),
+        ]
+    )
+    return {"verdict": verdict}
