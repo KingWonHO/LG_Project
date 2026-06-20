@@ -38,8 +38,8 @@ React(shadcn/ui) 프론트 → FastAPI 백엔드 → Qwen LLM(로컬/사내). DB
 ### 백엔드 (FastAPI, `backend/`)
 
 - 🟨 API 스켈레톤 — `main.py` _(엔드포인트 구조만, 응답 placeholder)_
-- ⬜ ANA-001 파일 파싱 — `src/file_parser.py`
-- ⬜ ANA-002 컬럼 자동 매핑 — `src/column_mapper.py`
+- ✅ ANA-001 파일 파싱 — `src/file_parser.py` _(CSV/XLSX -> DataFrame 변환)_
+- 🟨 ANA-002 컬럼 자동 매핑 — `src/column_mapper.py`
 - ⬜ ANA-003 Trip Code 분석 — `src/trip_analyzer.py`
 - ⬜ ANA-004 정상 기준 비교 — `src/baseline_analyzer.py`
 - ⬜ ANA-005 데이터 품질 이상 탐지 — `src/data_quality_checker.py`
