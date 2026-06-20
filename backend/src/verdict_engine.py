@@ -42,3 +42,12 @@ def decide_baseline_verdict(baseline: dict) -> str:
     baseline 이탈은 FAIL이 아니라 관리필요까지만 영향을 준다.
     """
     return NEEDS_ATTENTION if baseline["out_of_range"] else PASS
+
+
+def decide_quality_verdict(quality: dict) -> str:
+    """데이터 품질 결과(누락값/이상치 개수)로 부분 판정을 내린다.
+
+    데이터품질이상은 USR-004에 따라 verdict_engine 밖(ANA-005/result_builder)에서
+    별도로 표시되는 상태이므로, 이 함수는 PASS/관리필요 두 단계만 다룬다.
+    """
+    return NEEDS_ATTENTION if quality["missing"] > 0 or quality["outliers"] > 0 else PASS
