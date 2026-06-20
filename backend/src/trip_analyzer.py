@@ -33,3 +33,11 @@ def find_trip_ranges(df: pd.DataFrame) -> list[list]:
     for _, group in df[mask].groupby(group_id[mask]):
         ranges.append([group["Time"].iloc[0].item(), group["Time"].iloc[-1].item()])
     return ranges
+
+
+def analyze_trip(df: pd.DataFrame) -> dict:
+    """Trip 발생 횟수와 구간을 종합하여 표준 trip 결과를 생성한다 (verdict_engine/result_builder에서 사용)."""
+    return {
+        "count": count_trip_occurrences(df),
+        "ranges": find_trip_ranges(df),
+    }
