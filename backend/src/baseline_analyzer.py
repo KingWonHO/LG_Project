@@ -36,3 +36,8 @@ def find_out_of_range_features(df: pd.DataFrame, baseline: dict[str, dict]) -> l
         if not is_within_baseline(summarize_feature(df, column), baseline_range):
             out_of_range.append(column)
     return out_of_range
+
+
+def analyze_baseline(df: pd.DataFrame, baseline: dict[str, dict]) -> dict:
+    """baseline 비교 결과를 종합하여 표준 baseline 결과를 생성한다 (verdict_engine/result_builder에서 사용)."""
+    return {"out_of_range": find_out_of_range_features(df, baseline)}
