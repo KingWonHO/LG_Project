@@ -51,3 +51,27 @@ def build_series(df: pd.DataFrame, columns: list[str], max_points: int = 500) ->
             record[column] = _to_native(value)
         series.append(record)
     return series
+
+
+def build_result(
+    df: pd.DataFrame,
+    columns: list[str],
+    verdict: dict,
+    trip: dict,
+    baseline: dict,
+    quality: dict,
+    max_points: int = 500,
+) -> dict:
+    """trip/baseline/quality/verdict 분석 결과와 시계열 데이터를 표준 결과 JSON으로 합친다.
+
+    verdict/trip/baseline/quality는 각각 verdict_engine.analyze_verdict,
+    trip_analyzer.analyze_trip, baseline_analyzer.analyze_baseline,
+    data_quality_checker(ANA-005)가 만든 결과 dict를 그대로 전달받는다.
+    """
+    return {
+        **verdict,
+        "trip": trip,
+        "baseline": baseline,
+        "quality": quality,
+        "series": build_series(df, columns, max_points),
+    }
