@@ -12,3 +12,12 @@ import pandas as pd
 def detect_trip_mask(df: pd.DataFrame) -> pd.Series:
     """Trip_Code가 0이 아닌 행을 표시하는 불리언 마스크를 반환한다."""
     return df["Trip_Code"] != 0
+
+
+def count_trip_occurrences(df: pd.DataFrame) -> int:
+    """Trip_Code가 연속으로 0이 아닌 구간(발생 1회 단위)의 개수를 계산한다."""
+    mask = detect_trip_mask(df)
+    if not mask.any():
+        return 0
+    group_id = (mask != mask.shift()).cumsum()
+    return group_id[mask].nunique()
