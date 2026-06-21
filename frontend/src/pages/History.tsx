@@ -31,12 +31,10 @@ export default function History() {
         </div>
         <VerdictBadge verdict={rec.판정} />
       </div>
-
       <Card>
         <CardContent className="pt-6 text-sm space-y-2">
           <p className="text-muted-foreground">
-            이 화면은 분석 이력 요약입니다. 상세 결과(서술·원인·조치)는 백엔드 상세 조회 엔드포인트
-            (예: <code>GET /api/history/&#123;id&#125;</code>) 추가 후 연결됩니다.
+            분석 이력 요약입니다. 상세 결과(서술·원인·조치)는 백엔드 상세 조회 엔드포인트(<code>GET /api/history/&#123;id&#125;</code>) 추가 후 연결됩니다.
           </p>
           <table className="w-full">
             <tbody>

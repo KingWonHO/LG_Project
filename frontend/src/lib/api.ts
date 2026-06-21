@@ -1,4 +1,3 @@
-// 백엔드 REST 클라이언트. dev는 vite 프록시(/api→8000), prod는 nginx 프록시.
 const BASE = "/api";
 
 async function j<T>(res: Response): Promise<T> {
@@ -6,7 +5,6 @@ async function j<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
-// /api/analyze 응답 (main.py 실측)
 export type AnalyzeResponse = {
   verdict: string;
   trip: { count: number; ranges: number[][] };
@@ -38,7 +36,6 @@ export type Baseline = {
 };
 
 export type PromptData = { version: string | null; text: string };
-
 export type ReportData = { summary: string; model?: string };
 
 const jsonHeaders = { "Content-Type": "application/json" };
@@ -54,7 +51,6 @@ export const api = {
 
   history: () => fetch(`${BASE}/history`).then(j<HistoryItem[]>),
 
-  // 엔지니어 관리
   getTripCodes: () => fetch(`${BASE}/trip-codes`).then(j<TripCode[]>),
   putTripCodes: (items: TripCode[]) =>
     fetch(`${BASE}/trip-codes`, { method: "PUT", headers: jsonHeaders, body: JSON.stringify(items) }).then(j<{ saved: number }>),
@@ -70,7 +66,6 @@ export const api = {
   putRules: (rules: unknown) =>
     fetch(`${BASE}/rules`, { method: "PUT", headers: jsonHeaders, body: JSON.stringify(rules) }).then(j<{ ok: boolean }>),
 
-  // 리포트 (다음 단계)
   report: (analysis: unknown) =>
     fetch(`${BASE}/report`, { method: "POST", headers: jsonHeaders, body: JSON.stringify(analysis) }).then(j<ReportData>),
 };
