@@ -2,7 +2,6 @@
 __pycache__/
 *.py[cod]
 *.egg-info/
-.eggs/
 build/
 dist/
 
@@ -10,28 +9,32 @@ dist/
 .venv/
 venv/
 env/
+backend/.venv/
 
 # --- 환경 변수 (비밀값) ---
 .env
+backend/.env
 
-# --- 데이터/산출물 (실데이터는 커밋 금지) ---
-data/uploads/*
-data/reports/*
-data/chroma/
+# --- 데이터/산출물 (실데이터·DB 커밋 금지) ---
+backend/data/uploads/*
+backend/data/reports/*
+backend/data/chroma/
 *.db
 *.sqlite3
-!data/uploads/.gitkeep
-!data/reports/.gitkeep
+!backend/data/uploads/.gitkeep
+!backend/data/reports/.gitkeep
 
-# --- 모델 캐시 ---
+# --- 모델/캐시 ---
 .cache/
 models/
+
+# --- 프론트엔드 ---
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
 
 # --- IDE / OS ---
 .idea/
 .vscode/
 .DS_Store
 Thumbs.db
-
-# --- Streamlit ---
-.streamlit/secrets.toml

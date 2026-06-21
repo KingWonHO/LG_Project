@@ -2,7 +2,7 @@
 # LG_Project 배포 구성
 #   backend  : FastAPI (분석/판정/RAG/리포트)
 #   frontend : React 빌드 → nginx
-#   qwen     : Qwen LLM 서버 (Ollama, OpenAI 호환)
+#   qwen     : Ollama LLM 데몬 (gemma3/qwen 등)
 # 실행: docker compose up -d --build
 # ============================================================
 services:
@@ -14,8 +14,8 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      - LLM_BASE_URL=http://qwen:11434/v1
-      - LLM_MODEL=qwen2.5:7b
+      - OLLAMA_HOST=http://qwen:11434
+      - LOCAL_LLM_MODEL=gemma3:4b
     volumes:
       - ./backend/data:/app/data
     depends_on:

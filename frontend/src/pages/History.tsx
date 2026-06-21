@@ -1,7 +1,5 @@
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Download } from "lucide-react";
 import { useApp } from "@/context";
 
 function VerdictBadge({ verdict }: { verdict: string }) {
@@ -10,15 +8,15 @@ function VerdictBadge({ verdict }: { verdict: string }) {
 }
 
 export default function History() {
-  const { history, selectedId } = useApp();
-  const rec = history.find((h) => h.id === selectedId) ?? history[0];
+  const { history, selected } = useApp();
+  const rec = selected ?? history[0];
 
   if (!rec) {
     return (
       <div className="max-w-3xl">
         <h2 className="text-lg font-medium mb-2">분석 이력</h2>
         <Card><CardContent className="pt-6 text-sm text-muted-foreground">
-          분석 기록이 없습니다. '사용자 분석'에서 분석을 실행하면 좌측 이력에 쌓입니다.
+          분석 기록이 없습니다. '사용자 분석'에서 파일을 분석하면 좌측 이력에 쌓입니다.
         </CardContent></Card>
       </div>
     );
@@ -28,39 +26,28 @@ export default function History() {
     <div className="max-w-3xl space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-medium">{rec.filename}</h2>
-          <p className="text-sm text-muted-foreground">{rec.time}</p>
+          <h2 className="text-lg font-medium">{rec.파일명}</h2>
+          <p className="text-sm text-muted-foreground">{rec.일시}{rec.행수 != null ? ` · ${rec.행수.toLocaleString()}행` : ""}</p>
         </div>
-        <VerdictBadge verdict={rec.verdict} />
+        <VerdictBadge verdict={rec.판정} />
       </div>
 
-      {/* 챗/프롬프트 스타일 결과 */}
       <Card>
-        <CardHeader><CardTitle>분석 결과</CardTitle></CardHeader>
-        <CardContent>
-          <div className="flex gap-3">
-            <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium shrink-0">AI</div>
-            <div className="flex-1 rounded-lg border bg-muted/40 p-4 space-y-4 text-sm">
-              <p className="leading-relaxed">{rec.narrative}</p>
-              <table className="w-full text-sm">
-                <tbody>
-                  {rec.result.map((r) => (
-                    <tr key={r.항목} className="border-b last:border-0">
-                      <td className="py-2 text-muted-foreground">{r.항목}</td>
-                      <td className="py-2 text-right font-medium">{r.결과}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+        <CardContent className="pt-6 text-sm space-y-2">
+          <p className="text-muted-foreground">
+            이 화면은 분석 이력 요약입니다. 상세 결과(서술·원인·조치)는 백엔드 상세 조회 엔드포인트
+            (예: <code>GET /api/history/&#123;id&#125;</code>) 추가 후 연결됩니다.
+          </p>
+          <table className="w-full">
+            <tbody>
+              <tr className="border-b"><td className="py-2 text-muted-foreground">파일명</td><td className="py-2 text-right font-medium">{rec.파일명}</td></tr>
+              <tr className="border-b"><td className="py-2 text-muted-foreground">일시</td><td className="py-2 text-right">{rec.일시}</td></tr>
+              <tr className="border-b"><td className="py-2 text-muted-foreground">행 수</td><td className="py-2 text-right">{rec.행수 ?? "-"}</td></tr>
+              <tr><td className="py-2 text-muted-foreground">판정</td><td className="py-2 text-right font-medium">{rec.판정}</td></tr>
+            </tbody>
+          </table>
         </CardContent>
       </Card>
-
-      <div className="flex gap-2">
-        <Button variant="outline" className="flex-1"><Download className="h-4 w-4" /> 리포트 생성</Button>
-        <Button variant="outline" className="flex-1">리포트 다운로드</Button>
-      </div>
     </div>
   );
 }
