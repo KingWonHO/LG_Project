@@ -27,7 +27,7 @@ dependencies = [
     "weasyprint>=62",
     # 설정
     "pydantic-settings>=2.4",
-    "python-dotenv>=1.0",
+    "ollama>=0.6.2",
 ]
 
 [project.optional-dependencies]
