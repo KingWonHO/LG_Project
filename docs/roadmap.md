@@ -13,11 +13,11 @@
 
 ---
 
-## ☐ Phase 1 — 백엔드 실분석 파이프라인 (핵심)
+## ☐ Phase 1 — 백엔드 실분석 파이프라인
 > 현재 `/api/analyze`는 고정 더미값. 아래를 구현해 **진짜 판정**이 나오게 한다.
-- [ ] ANA-001 `file_parser.py` — CSV/XLSX → DataFrame (인코딩/구분자 대응)
-- [ ] ANA-002 `column_mapper.py` — 파일별 컬럼명 → 표준 컬럼명 매핑
-- [ ] ANA-003 `trip_analyzer.py` — Trip_Code≠0 탐지, 발생 횟수·구간
+- [x] ANA-001 `file_parser.py` — CSV/XLSX → DataFrame (인코딩/구분자 대응)
+- [x] ANA-002 `column_mapper.py` — 파일별 컬럼명 → 표준 컬럼명 매핑
+- [x] ANA-003 `trip_analyzer.py` — Trip_Code≠0 탐지, 발생 횟수·구간
 - [ ] ANA-004 `baseline_analyzer.py` — baseline 대비 이탈 판단 (DB baseline 사용)
 - [ ] ANA-005 `data_quality_checker.py` — 이상치·누락·파싱오류 탐지
 - [ ] ANA-006 `verdict_engine.py` — 종합 → PASS/관리필요/FAIL
@@ -25,7 +25,7 @@
 - [ ] `main.py /api/analyze` 를 위 파이프라인 호출로 교체 (더미 제거)
 - [ ] 실제 CSV로 판정값이 파일마다 달라지는지 확인
 
-## ☐ Phase 2 — 화면 정합 (실데이터 표시)
+## ☐ Phase 2 — 화면 정합
 - [ ] 그래프: `/api/analyze` 응답의 `series`로 실제 시계열 표시 (프론트 임시 데이터 제거)
 - [ ] 이상 구간(USR-006): 응답 `trip.ranges` 다중 구간 하이라이트
 - [ ] 이력 상세: 백엔드 `GET /api/history/{id}` 추가 → 프론트 이력 클릭 시 전체 결과 표시
