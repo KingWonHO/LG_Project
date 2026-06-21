@@ -1,0 +1,1027 @@
+{
+  "kb_name": "comp_inverter_trip_cases",
+  "kb_version": "1.2.0",
+  "source": {
+    "document": "Inverter Trip Case.docx",
+    "section": "보호기능 및 Trip 상세 설명",
+    "note": "본 KB는 Compressor Raw Data AI Agent의 Trip 해석, 원인 추정, 설명 생성을 위한 규칙 기반 배경지식으로 사용한다."
+  },
+  "column_mapping_policy": {
+    "priority": "column_index",
+    "index_base": 0,
+    "note": "CSV 원본 컬럼명은 파일마다 다를 수 있으므로 신뢰하지 않는다. Agent는 DPS/NODPS Schema를 통해 컬럼 순서를 canonical_name으로 매핑한 뒤 Trip Case Rule을 적용한다.",
+    "time_column": {
+      "column_index": 0,
+      "canonical_name": "Time"
+    },
+    "trip_column": {
+      "column_index": 20,
+      "canonical_name": "Trip"
+    }
+  },
+  "signal_interpretation_policy": {
+    "Imag": {
+      "column_index": 1,
+      "canonical_name": "Imag",
+      "interpretation": "Imag는 모터 전류벡터의 크기이며, 실제 상전류 또는 Shunt 전류값과 직접적으로 동일하지 않다. 또한 마이컴 스케일이 적용된 값이므로 실제 전류[A] 기준의 정량 Threshold를 직접 적용하지 않는다.",
+      "usage_policy": [
+        "정량 판단 기준으로 사용하지 않는다.",
+        "과전류 기준값 4.2A를 Imag 값에 직접 비교하지 않는다.",
+        "Trip 직전 Imag가 상대적으로 높게 형성되었는지, 급증했는지, 불안정한지 등 정성적 경향 판단에만 사용한다.",
+        "Imag는 Real_Hz, Power, DC_link, Trip, DPS의 Trial_Count 등 다른 신호와 함께 보조 근거로 사용한다."
+      ]
+    }
+  },
+  "schema_reference": {
+    "common_columns": [
+      {
+        "column_index": 0,
+        "canonical_name": "Time"
+      },
+      {
+        "column_index": 1,
+        "canonical_name": "Imag"
+      },
+      {
+        "column_index": 2,
+        "canonical_name": "unused_1"
+      },
+      {
+        "column_index": 3,
+        "canonical_name": "DC_link"
+      },
+      {
+        "column_index": 4,
+        "canonical_name": "Ref_Hz"
+      },
+      {
+        "column_index": 5,
+        "canonical_name": "Real_Hz"
+      },
+      {
+        "column_index": 6,
+        "canonical_name": "unused_2"
+      },
+      {
+        "column_index": 7,
+        "canonical_name": "Power"
+      },
+      {
+        "column_index": 8,
+        "canonical_name": "IPM"
+      },
+      {
+        "column_index": 10,
+        "canonical_name": "Ramp_Hz"
+      },
+      {
+        "column_index": 11,
+        "canonical_name": "LeadA"
+      },
+      {
+        "column_index": 12,
+        "canonical_name": "LeadA_FW"
+      },
+      {
+        "column_index": 13,
+        "canonical_name": "LeadA_Add"
+      },
+      {
+        "column_index": 14,
+        "canonical_name": "LeadA_Total"
+      },
+      {
+        "column_index": 15,
+        "canonical_name": "MtoC"
+      },
+      {
+        "column_index": 18,
+        "canonical_name": "R_temp"
+      },
+      {
+        "column_index": 19,
+        "canonical_name": "Avg_Torque"
+      },
+      {
+        "column_index": 20,
+        "canonical_name": "Trip"
+      }
+    ],
+    "nodps_only_columns": [
+      {
+        "column_index": 9,
+        "canonical_name": "Wait_Time"
+      },
+      {
+        "column_index": 16,
+        "canonical_name": "unused_3"
+      },
+      {
+        "column_index": 17,
+        "canonical_name": "unused_4"
+      }
+    ],
+    "dps_only_columns": [
+      {
+        "column_index": 9,
+        "canonical_name": "Trial_Count"
+      },
+      {
+        "column_index": 16,
+        "canonical_name": "1st_Freq"
+      },
+      {
+        "column_index": 17,
+        "canonical_name": "2nd_Freq"
+      }
+    ]
+  },
+  "global_policies": {
+    "trip_priority_rule": "여러 Trip이 발생하면 가장 마지막에 발생한 Trip Code 또는 Trip 컬럼의 마지막 유효값을 우선 해석한다.",
+    "common_actions": [
+      "Trip 발생 시 Compressor는 정지 상태로 전환된다.",
+      "Trip 컬럼의 값을 기준으로 Trip 종류를 해석한다."
+    ],
+    "agent_analysis_policy": [
+      "Trip 컬럼에 0이 아닌 값이 존재하면 해당 Trip Case Rule을 우선 참조한다.",
+      "Trip 발생 시점 전후의 Time 기준 구간에서 관련 컬럼 변화를 함께 확인한다.",
+      "CSV 컬럼으로 직접 확인 불가능한 내부 검출 조건은 단정하지 않고 참고 정보로만 설명한다.",
+      "컬럼명보다 column_index를 우선하여 분석하고, canonical_name은 가독성을 위한 보조 정보로 사용한다.",
+      "Imag는 실제 전류값이 아니므로 정량 Threshold 비교에 사용하지 않고 정성적 보조 신호로만 해석한다."
+    ]
+  },
+  "trips": [
+    {
+      "trip_key": "SENSING_ERROR_CURRENT_OFFSET",
+      "trip_name_ko": "센싱 에러",
+      "trip_no": 1,
+      "restart_delay_s": 30,
+      "summary_ko": "전류 센싱 Offset 이상으로 판단되는 Trip이다.",
+      "csv_observable": "partial",
+      "csv_required_columns": [
+        {
+          "column_index": 20,
+          "canonical_name": "Trip",
+          "role": "Trip 1 발생 여부 확인"
+        },
+        {
+          "column_index": 1,
+          "canonical_name": "Imag",
+          "role": "전류벡터 크기의 고정, 튐, 비정상 패턴을 정성적으로 확인"
+        },
+        {
+          "column_index": 0,
+          "canonical_name": "Time",
+          "role": "Trip 발생 시점 전후 구간 확인"
+        }
+      ],
+      "csv_optional_columns": [
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "Compressor 운전 상태 확인"
+        }
+      ],
+      "csv_analysis_guidance": [
+        "20번 컬럼 Trip 값이 1인지 확인한다.",
+        "1번 컬럼 Imag가 기동 전후 또는 Trip 직전 비정상적으로 고정되거나 급격히 튀는지 정성적으로 확인한다.",
+        "0번 컬럼 Time 기준으로 Trip 발생 직전 구간의 Imag 패턴을 확인한다.",
+        "5번 컬럼 Real_Hz가 운전 중인데 Imag가 운전 상태와 맞지 않는 패턴을 보이면 센싱 이상 가능성을 검토한다.",
+        "컴프 ON 신호(15번 컬럼이 홀수)가 수신된 직후에 나타나는 Trip Case로 안정 운전중에 나타난다면 노이즈 혹은 하드웨어 에러로 판단한다."
+      ],
+      "thresholds": [
+        {
+          "name": "offset_center_v",
+          "value": 2.5,
+          "unit": "V",
+          "csv_column_index": null,
+          "csv_canonical_name": null,
+          "csv_applicable": false
+        },
+        {
+          "name": "offset_tolerance",
+          "value": 12,
+          "unit": "%(±)",
+          "csv_column_index": null,
+          "csv_canonical_name": null,
+          "csv_applicable": false
+        }
+      ],
+      "possible_csv_based_explanation": [
+        "Trip 1이 발생했고 Imag 신호가 비정상적으로 고정되거나 불연속적으로 변화했다면 전류 센싱 이상 가능성이 있다.",
+        "Trip 1이 발생했고 발생한 시점이 컴프 ON 신호가 수신된 시점에서 10초 이내이면 전류 센싱에 이상 가능성이 있다."
+
+      ],
+      "non_csv_reference": [
+        "1-shunt 전류센싱 증폭 출력 전압",
+        "정상 Offset 2.5V 기준",
+        "AD 샘플 8192회 평균값",
+        "2.5V ±12% 판정 조건",
+        "Micom Power Reset 시 Offset 검출 조건"
+      ],
+      "solution": {
+        "cause_check": [],
+        "recommended_action": ["Trip 1이 발생한 시점이 컴프 ON 신호가 수신되고 20초 이상 안정 운전을 하고있다면 노이즈 혹은 하드웨어 에러에 의한 비정상동작이니 SW개발자에 의견 요청한다."],
+        "parameter_check": [],
+        "hardware_check": [],
+        "additional_note": ""
+      },
+      "agent_warning": "CSV에는 전류센싱 증폭 출력 전압과 AD Offset 값이 없으므로 Trip 값과 Imag 패턴만으로 보조 해석해야 한다."
+    },
+    {
+      "trip_key": "OVERVOLTAGE_DC_LINK",
+      "trip_name_ko": "과전압 Trip",
+      "trip_no": 2,
+      "restart_delay_s": 240,
+      "summary_ko": "DC Link 전압이 과도하게 상승한 경우 발생하는 Trip이다.",
+      "csv_observable": true,
+      "csv_required_columns": [
+        {
+          "column_index": 20,
+          "canonical_name": "Trip",
+          "role": "Trip 2 발생 여부 확인"
+        },
+        {
+          "column_index": 3,
+          "canonical_name": "DC_link",
+          "role": "DC Link 과전압 여부 확인"
+        },
+        {
+          "column_index": 0,
+          "canonical_name": "Time",
+          "role": "과전압 발생 시점 및 Trip 시점 확인"
+        }
+      ],
+      "csv_optional_columns": [
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "Compressor 운전 상태 확인"
+        },
+        {
+          "column_index": 7,
+          "canonical_name": "Power",
+          "role": "부하 또는 출력 변화 확인"
+        }
+      ],
+      "csv_analysis_guidance": [
+        "20번 컬럼 Trip 값이 2인지 확인한다.",
+        "3번 컬럼 DC_link가 Trip 발생 직전 450V 이상으로 상승했는지 확인한다.",
+        "0번 컬럼 Time 기준으로 DC_link 상승 시점과 Trip 발생 시점의 관계를 확인한다.",
+        "5번 Real_Hz와 7번 Power를 함께 확인하여 운전 중 과전압인지 판단한다."
+      ],
+      "thresholds": [
+        {
+          "name": "dc_link_over_voltage",
+          "value": 450,
+          "unit": "V",
+          "csv_column_index": 3,
+          "csv_canonical_name": "DC_link",
+          "csv_applicable": true
+        },
+        {
+          "name": "consecutive_samples",
+          "value": 2,
+          "unit": "count",
+          "csv_column_index": null,
+          "csv_canonical_name": null,
+          "csv_applicable": false
+        }
+      ],
+      "possible_csv_based_explanation": [
+        "Trip 2 발생 직전 DC_link가 450V 이상으로 상승했다면 과전압 Trip 가능성이 높다.",
+        "운전 중 DC_link가 순간적으로 상승하고 이후 Trip 2가 기록되면 DC Link 과전압 상태로 해석할 수 있다."
+      ],
+      "non_csv_reference": [
+        "인버터 PWM 주기 기준 2회 연속 검출 조건",
+        "LED 2회 점멸 정보"
+      ],
+      "solution": {
+        "cause_check": [],
+        "recommended_action": [],
+        "parameter_check": [],
+        "hardware_check": [],
+        "additional_note": ""
+      },
+      "agent_warning": "CSV 샘플링 주기가 PWM 주기와 다를 수 있으므로 2회 연속 조건은 CSV에서 직접 검증하지 않는다."
+    },
+    {
+      "trip_key": "PHASE_LOSS",
+      "trip_name_ko": "결상 Trip",
+      "trip_no": 3,
+      "restart_delay_s": 270,
+      "summary_ko": "모터 상전류 검출 이상 또는 결상 상태로 판단되는 Trip이다.",
+      "csv_observable": "partial",
+      "csv_required_columns": [
+        {
+          "column_index": 20,
+          "canonical_name": "Trip",
+          "role": "Trip 3 발생 여부 확인"
+        },
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "실제 속도 상승 여부 확인"
+        },
+        {
+          "column_index": 0,
+          "canonical_name": "Time",
+          "role": "기동 및 Trip 발생 시점 확인"
+        }
+      ],
+      "csv_optional_columns": [
+        {
+          "column_index": 1,
+          "canonical_name": "Imag",
+          "role": "전류벡터 크기가 정상 기동 패턴 대비 낮거나 불안정한지 정성적으로 확인"
+        },
+        {
+          "column_index": 4,
+          "canonical_name": "Ref_Hz",
+          "role": "외부 지령 주파수 확인"
+        },
+        {
+          "column_index": 10,
+          "canonical_name": "Ramp_Hz",
+          "role": "내부 지령 주파수 확인"
+        }
+      ],
+      "csv_analysis_guidance": [
+        "20번 컬럼 Trip 값이 3인지 확인한다.",
+        "4번 Ref_Hz 또는 10번 Ramp_Hz가 존재하는데 5번 Real_Hz가 정상적으로 상승하지 못하는지 확인한다.",
+        "1번 Imag는 정량값이 아니라 보조 신호로 사용하며, 정상 기동 패턴 대비 낮거나 불안정한지만 정성적으로 확인한다.",
+        "기동 시도 이후 Real_Hz가 유지되지 못하고 Trip으로 이어지는지 확인한다."
+      ],
+      "thresholds": [
+        {
+          "name": "phase_current_min",
+          "value": 0.04,
+          "unit": "A",
+          "csv_column_index": null,
+          "csv_canonical_name": null,
+          "csv_applicable": false
+        },
+        {
+          "name": "count_required",
+          "value": 100,
+          "unit": "count",
+          "csv_column_index": null,
+          "csv_canonical_name": null,
+          "csv_applicable": false
+        }
+      ],
+      "possible_csv_based_explanation": [
+        "Trip 3이 발생하고 지령 주파수 대비 Real_Hz가 상승하지 못했다면 결상 또는 전류 검출 이상 가능성이 있다.",
+        "Imag는 실제 상전류가 아니므로 정량 판단에는 사용하지 않고, 정상 기동 패턴 대비 낮거나 불안정한 경향만 참고한다."
+      ],
+      "non_csv_reference": [
+        "U/V/W 각 상 전류",
+        "각 상 전류의 특정 전기각 위치별 검출값",
+        "0.04A 상전류 기준",
+        "AD 변환값 60",
+        "220us × 100 = 약 20ms 조건"
+      ],
+      "solution": {
+        "cause_check": [],
+        "recommended_action": ["3번 트립이 발생할 경우 하네스 정상장착 여부를 우선적으로 확인한다."],
+        "parameter_check": [],
+        "hardware_check": ["3번 트립이 발생한 상황에서 하네스가 정상장착 되었을경우 전류센싱품질 불량, 하드웨어 노이즈의 영향으로 발생할 수 있으니 제어담당자 확인필요하다."],
+        "additional_note": "하네스 정상장착 여부확인 후 에도 3번 트립이 발생할 경우 제어담당자 확인필요"
+      },
+      "agent_warning": "CSV에는 U/V/W 개별 상전류가 없고 Imag만 있으므로 결상 원인을 직접 확정할 수 없다. Imag에는 0.04A 기준을 적용하지 않는다."
+    },
+    {
+      "trip_key": "SENSORLESS_ANGLE_DEVIATION",
+      "trip_name_ko": "센서리스 Trip",
+      "trip_no": 5,
+      "restart_delay_s": 330,
+      "summary_ko": "센서리스 제어의 각도 추정 이상으로 판단되는 Trip이다.",
+      "csv_observable": "partial",
+      "csv_required_columns": [
+        {
+          "column_index": 20,
+          "canonical_name": "Trip",
+          "role": "Trip 5 발생 여부 확인"
+        },
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "실제 주파수 불안정 또는 추종 실패 확인"
+        },
+        {
+          "column_index": 0,
+          "canonical_name": "Time",
+          "role": "센서리스 이상 추정 구간 확인"
+        }
+      ],
+      "csv_optional_columns": [
+        {
+          "column_index": 1,
+          "canonical_name": "Imag",
+          "role": "전류벡터 크기의 급증 또는 불안정 패턴을 정성적으로 확인"
+        },
+        {
+          "column_index": 4,
+          "canonical_name": "Ref_Hz",
+          "role": "외부 지령 대비 추종성 확인"
+        },
+        {
+          "column_index": 10,
+          "canonical_name": "Ramp_Hz",
+          "role": "내부 지령 대비 추종성 확인"
+        },
+        {
+          "column_index": 11,
+          "canonical_name": "LeadA",
+          "role": "기본 베타각 변화 확인"
+        },
+        {
+          "column_index": 12,
+          "canonical_name": "LeadA_FW",
+          "role": "약자속 베타각 변화 확인"
+        },
+        {
+          "column_index": 14,
+          "canonical_name": "LeadA_Total",
+          "role": "최종 베타각 급변 또는 포화 확인"
+        }
+      ],
+      "csv_analysis_guidance": [
+        "20번 컬럼 Trip 값이 5인지 확인한다.",
+        "5번 Real_Hz가 기동 또는 운전 중 불안정하게 흔들리는지 확인한다.",
+        "4번 Ref_Hz 또는 10번 Ramp_Hz 대비 Real_Hz 추종이 실패했는지 확인한다.",
+        "1번 Imag는 정량 판단에 사용하지 않고, 급증 또는 불안정 패턴 여부만 정성적으로 참고한다.",
+        "센서리스 트립 판단 타이밍은 기동시작 후 5초 이내이므로 이 이후에 발생한다면 제어담당자 확인필요"
+      ],
+      "thresholds": [
+        {
+          "name": "allowed_angle_deviation",
+          "value": 30,
+          "unit": "%(±)",
+          "csv_column_index": null,
+          "csv_canonical_name": null,
+          "csv_applicable": false
+        },
+        {
+          "name": "consecutive_count",
+          "value": 200,
+          "unit": "count",
+          "csv_column_index": null,
+          "csv_canonical_name": null,
+          "csv_applicable": false
+        }
+      ],
+      "possible_csv_based_explanation": [
+        "Trip 5와 함께 Real_Hz 추종 실패, LeadA_Total 급변, Imag 불안정 경향이 나타나면 센서리스 추정 불안정 가능성이 있다."
+      ],
+      "non_csv_reference": [
+        "추정 각도 변동량",
+        "실제 각도 변동량",
+        "PWM 연산 시 추정 변위",
+        "±30% 예측 범위",
+        "200회 연속 조건"
+      ],
+      "solution": {
+        "cause_check": ["컴프 Rotor 고정일 가능성, 자가진단 파라미터 이상 가능성"],
+        "recommended_action": ["트립이 발생한 시간을 확인해야 한다. 발생시간이 ON시작 후 5초 이내일 경우 Lock Rotor일 가능성이 있기 때문에 컴프 점검이 필요하다.", 
+                                "트립 발생한 시간이 급유운전 이후에 발생할 경우 자가진단 오류일 가능성이 있기 때문에 제어담당자 확인이 필요하다."],
+        "parameter_check": ["급유운전 자가진단 판단시간 확인 필요"],
+        "hardware_check": [],
+        "additional_note": ""
+      },
+      "agent_warning": "CSV에는 센서리스 추정각 자체가 없으므로 Trip 값과 주변 신호 패턴을 통해 간접 해석한다. Imag는 보조 경향 신호로만 사용한다."
+    },
+    {
+      "trip_key": "OVERCURRENT_SHUNT",
+      "trip_name_ko": "과전류 Trip",
+      "trip_no": 6,
+      "restart_delay_s": 360,
+      "summary_ko": "Compressor 구동 전류가 내부 기준 이상으로 상승한 경우 발생하는 Trip이다.",
+      "csv_observable": "partial",
+      "csv_required_columns": [
+        {
+          "column_index": 20,
+          "canonical_name": "Trip",
+          "role": "Trip 6 발생 여부 확인"
+        },
+        {
+          "column_index": 0,
+          "canonical_name": "Time",
+          "role": "과전류 Trip 발생 시점 및 전후 구간 확인"
+        }
+      ],
+      "csv_optional_columns": [
+        {
+          "column_index": 1,
+          "canonical_name": "Imag",
+          "role": "전류벡터 크기가 Trip 직전 높게 형성되거나 급증했는지 정성적으로 확인"
+        },
+        {
+          "column_index": 3,
+          "canonical_name": "DC_link",
+          "role": "전류 상승 추정 구간에서 전압 강하 여부 확인"
+        },
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "전류 상승 추정 대비 실제 속도 상승 여부 확인"
+        },
+        {
+          "column_index": 7,
+          "canonical_name": "Power",
+          "role": "출력 증가 동반 여부 확인"
+        },
+        {
+          "column_index": 9,
+          "canonical_name": "Trial_Count",
+          "data_type": "DPS",
+          "role": "차압 기동 실패 또는 재기동 반복 여부 확인"
+        }
+      ],
+      "csv_analysis_guidance": [
+        "20번 컬럼 Trip 값이 6인지 확인한다.",
+        "1번 Imag는 실제 Shunt 전류값이 아니므로 4.2A 기준과 직접 비교하지 않는다.",
+        "Trip 발생 직전 Imag가 이전 구간 또는 정상 패턴 대비 높게 형성되었는지, 급증했는지 정성적으로 확인한다.",
+        "Imag 상승 경향이 있을 때 5번 Real_Hz가 지령을 따라가지 못하는지 확인한다.",
+        "3번 DC_link 전압 강하 또는 7번 Power 급증이 동반되는지 확인한다.",
+        "DPS 데이터에서는 9번 Trial_Count 증가 여부를 함께 확인하여 차압 기동 실패와 연관되는지 판단한다."
+      ],
+      "thresholds": [
+        {
+          "name": "shunt_over_current",
+          "value": 4.2,
+          "unit": "A",
+          "csv_column_index": null,
+          "csv_canonical_name": null,
+          "csv_applicable": false,
+          "note": "4.2A는 내부 Shunt 전류 기준이며 CSV의 Imag 값에 직접 적용하지 않는다."
+        },
+        {
+          "name": "consecutive_samples",
+          "value": 3,
+          "unit": "count",
+          "csv_column_index": null,
+          "csv_canonical_name": null,
+          "csv_applicable": false
+        }
+      ],
+      "possible_csv_based_explanation": [
+        "Trip 6이 발생했고 Trip 직전 Imag가 정상 패턴 대비 높게 형성되거나 급증했다면 과전류 Trip과 연관된 부하 증가 가능성을 검토할 수 있다.",
+        "Imag 상승 경향 후 Real_Hz가 상승하지 못했다면 기동 부하 과다 또는 Stall 가능성을 함께 검토한다.",
+        "DPS에서 Trial_Count 증가와 함께 Trip 6이 발생하면 차압 기동 부하로 인한 과전류 가능성을 검토한다."
+      ],
+      "non_csv_reference": [
+        "실제 Shunt 전류",
+        "개별 상전류",
+        "4.2A 과전류 기준",
+        "Shunt 전류의 PWM 주기별 3회 연속 조건",
+        "모터 R/L 기반 SW Trip Level 산정"
+      ],
+      "solution": {
+        "cause_check": [],
+        "recommended_action": [],
+        "parameter_check": [],
+        "hardware_check": [],
+        "additional_note": ""
+      },
+      "agent_warning": "CSV의 Imag는 실제 Shunt 전류가 아니므로 4.2A 기준을 직접 적용하지 않는다. Imag는 높음, 급증, 불안정 같은 정성적 보조 신호로만 사용한다."
+    },
+    {
+      "trip_key": "FO_SIGNAL",
+      "trip_name_ko": "FO Trip",
+      "trip_no": 7,
+      "restart_delay_s": 300,
+      "summary_ko": "IPM 또는 인버터 보호 신호인 FO Signal에 의해 발생하는 Trip이다.",
+      "csv_observable": "partial",
+      "csv_required_columns": [
+        {
+          "column_index": 20,
+          "canonical_name": "Trip",
+          "role": "Trip 7 발생 여부 확인"
+        },
+        {
+          "column_index": 0,
+          "canonical_name": "Time",
+          "role": "FO Trip 발생 전후 구간 확인"
+        }
+      ],
+      "csv_optional_columns": [
+        {
+          "column_index": 1,
+          "canonical_name": "Imag",
+          "role": "전류벡터 크기의 급증 또는 불안정 경향을 정성적으로 확인"
+        },
+        {
+          "column_index": 3,
+          "canonical_name": "DC_link",
+          "role": "전압 이상 여부 확인"
+        },
+        {
+          "column_index": 7,
+          "canonical_name": "Power",
+          "role": "출력 급증 여부 확인"
+        },
+        {
+          "column_index": 8,
+          "canonical_name": "IPM",
+          "role": "IPM 온도 상승 경향 확인"
+        }
+      ],
+      "csv_analysis_guidance": [
+        "20번 컬럼 Trip 값이 7인지 확인한다.",
+        "Trip 발생 직전 3번 DC_link 이상, 7번 Power 급증, 8번 IPM 상승 경향이 있었는지 확인한다.",
+        "1번 Imag는 정량 판단에 사용하지 않고 급증 또는 불안정 경향만 참고한다.",
+        "8번 IPM은 PCB별로 정확도가 다르므로 절대값보다 상승 경향만 참고한다."
+      ],
+      "thresholds": [
+        {
+          "name": "fo_low_min_time",
+          "value": 20,
+          "unit": "us",
+          "csv_column_index": null,
+          "csv_canonical_name": null,
+          "csv_applicable": false
+        },
+        {
+          "name": "edge_count_trip",
+          "value": 6,
+          "unit": "count",
+          "csv_column_index": null,
+          "csv_canonical_name": null,
+          "csv_applicable": false
+        }
+      ],
+      "possible_csv_based_explanation": [
+        "Trip 7이 발생하고 직전 DC_link, Power, IPM, Imag 경향 중 하나 이상이 급변했다면 인버터 보호 동작 가능성이 있다."
+      ],
+      "non_csv_reference": [
+        "FO Signal",
+        "FO Low Edge",
+        "20us 이상 Low 조건",
+        "Edge Count 6 이상 조건",
+        "게이트 정지 5~10us 이내 수행"
+      ],
+      "solution": {
+        "cause_check": [],
+        "recommended_action": ["부하(Power, Imag, LeadA_total, Hz_Real떨림)영향도를 확인하고 HW영향인지, 제어품질 불량인지 확인하여 조치한다."],
+        "parameter_check": ["과부하, 고토크의 운전 상태일 경우 6번 전류트립과 번갈아 가며 나타날 수 있다. FO는 5.0A 기준임."],
+        "hardware_check": ["Power값, Imag값에 이상이 없을경우 PCB상 IPM에 인가되는 15V 전원 이상으로 인해 FO감지되므로 하드웨어담당자, 제어담당자에 문의한다."],
+        "additional_note": "보통 순간적인 피크성 전류에는 6번 전류트립, 과부하에 의한 과전류에는 7번 FO트립이 발생한다."
+      },
+      "agent_warning": "CSV에는 FO Signal이 없으므로 FO Trip의 직접 검출 원인은 확인할 수 없다. Imag는 정성적 보조 신호로만 사용한다."
+    },
+    {
+      "trip_key": "COMMUNICATION_LOSS_MAIN_COMP",
+      "trip_name_ko": "통신 Trip",
+      "trip_no": 8,
+      "restart_delay_s": null,
+      "summary_ko": "Main Micom과 Compressor 제어부 간 통신 이상으로 판단되는 Trip이다.",
+      "csv_observable": "partial",
+      "csv_required_columns": [
+        {
+          "column_index": 20,
+          "canonical_name": "Trip",
+          "role": "Trip 8 발생 여부 확인"
+        },
+        {
+          "column_index": 0,
+          "canonical_name": "Time",
+          "role": "통신 이상 추정 구간 확인"
+        }
+      ],
+      "csv_optional_columns": [
+        {
+          "column_index": 4,
+          "canonical_name": "Ref_Hz",
+          "role": "외부 지령 갱신 상태 확인"
+        },
+        {
+          "column_index": 10,
+          "canonical_name": "Ramp_Hz",
+          "role": "내부 지령 상태 확인"
+        },
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "통신 Trip 이후 Compressor 정지 여부 확인"
+        },
+        {
+          "column_index": 15,
+          "canonical_name": "MtoC",
+          "role": "상위제어기 운전 지령 상태 확인"
+        }
+      ],
+      "csv_analysis_guidance": [
+        "20번 컬럼 Trip 값이 8인지 확인한다.",
+        "4번 Ref_Hz 명령이 일정 시간 갱신되지 않거나 비정상적으로 고정되는지 확인한다.",
+        "15번 MtoC 운전 지령 상태가 비정상적으로 고정되거나 변화하지 않는지 확인한다.",
+        "4번 Ref_Hz와 10번 Ramp_Hz 사이의 관계가 비정상적인지 확인한다.",
+        "Trip 이후 5번 Real_Hz가 정지 상태로 전환되는지 확인한다."
+      ],
+      "thresholds": [
+        {
+          "name": "communication_timeout",
+          "value": 60,
+          "unit": "s",
+          "csv_column_index": null,
+          "csv_canonical_name": null,
+          "csv_applicable": false
+        }
+      ],
+      "possible_csv_based_explanation": [
+        "Trip 8이 발생하고 Ref_Hz 또는 MtoC 갱신이 멈춘 패턴이 있다면 통신 이상 가능성이 있다."
+      ],
+      "non_csv_reference": [
+        "Main Micom ↔ Comp 통신 수신 상태",
+        "1분 연속 통신 미수신 조건",
+        "통신 프로토콜 정상 수신 여부"
+      ],
+      "solution": {
+        "cause_check": [],
+        "recommended_action": [],
+        "parameter_check": [],
+        "hardware_check": ["통신트립의 경우 HW적인 이상이 있거나 Main Micom의 SW가 비정상일 가능성이 있기 때문에 확인이 필요하다."],
+        "additional_note": "15번 MtoC 데이터, 4번 Ref_Hz와 10번 Ramp_Hz 사이의 관계확인 후 비정상일 경우 Main Micom SW를 재라이팅한다."
+      },
+      "agent_warning": "CSV에는 통신 수신 플래그가 없으므로 통신 이상은 Trip 값과 Ref_Hz, MtoC 패턴으로만 간접 판단한다."
+    },
+    {
+      "trip_key": "POWER_OVERLOAD",
+      "trip_name_ko": "파워 Trip",
+      "trip_no": 9,
+      "restart_delay_s": 390,
+      "summary_ko": "Compressor 출력 Power가 기준 이상으로 지속될 때 발생하는 Trip이다.",
+      "csv_observable": true,
+      "csv_required_columns": [
+        {
+          "column_index": 20,
+          "canonical_name": "Trip",
+          "role": "Trip 9 발생 여부 확인"
+        },
+        {
+          "column_index": 7,
+          "canonical_name": "Power",
+          "role": "Power 과다 여부 확인"
+        },
+        {
+          "column_index": 0,
+          "canonical_name": "Time",
+          "role": "Power 과다 지속 시간 확인"
+        }
+      ],
+      "csv_optional_columns": [
+        {
+          "column_index": 1,
+          "canonical_name": "Imag",
+          "role": "전류벡터 크기가 Power 상승과 함께 높게 형성되는지 정성적으로 확인"
+        },
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "속도 조건 확인"
+        },
+        {
+          "column_index": 19,
+          "canonical_name": "Avg_Torque",
+          "role": "토크 증가 동반 여부 확인"
+        }
+      ],
+      "csv_analysis_guidance": [
+        "20번 컬럼 Trip 값이 9인지 확인한다.",
+        "7번 Power가 기준치(컴프마다 상이) 이상으로 상승했는지 확인한다.",
+        "0번 Time 기준으로 Power 기준치 이상의 상태가 약 5초 이상 지속되었는지 확인한다.",
+        "Power 상승이 19번 Avg_Torque 상승과 함께 나타나는지 확인한다.",
+        "1번 Imag는 정량 판단에 사용하지 않고 Power 상승과 함께 높게 형성되는지 정성적으로 참고한다."
+      ],
+      "thresholds": [
+        {
+          "name": "power_over",
+          "value": 250,
+          "unit": "W",
+          "csv_column_index": 7,
+          "csv_canonical_name": "Power",
+          "csv_applicable": true
+        },
+        {
+          "name": "duration",
+          "value": 5,
+          "unit": "s",
+          "csv_column_index": 0,
+          "csv_canonical_name": "Time",
+          "csv_applicable": true
+        }
+      ],
+      "possible_csv_based_explanation": [
+        "Power가 250W 이상으로 5초 이상 지속된 뒤 Trip 9가 발생했다면 파워 Trip 가능성이 높다.",
+        "Avg_Torque가 함께 상승했다면 부하 과다 또는 운전 조건 과부하 가능성을 검토한다.",
+        "Imag는 실제 전류값이 아니므로 Power Trip 판단의 보조 경향 신호로만 활용한다."
+      ],
+      "non_csv_reference": [
+        "SW 필터 계수 300",
+        "내부 출력 Power 연산 방식"
+      ],
+      "solution": {
+        "cause_check": [],
+        "recommended_action": [],
+        "parameter_check": [],
+        "hardware_check": [],
+        "additional_note": ""
+      },
+      "agent_warning": "CSV의 Power가 내부 Trip 판정에 사용된 필터링 Power와 동일한지 확인 필요하다. Imag는 정량 기준으로 사용하지 않는다."
+    },
+    {
+      "trip_key": "AVERAGE_TORQUE_OVER",
+      "trip_name_ko": "토크 Trip",
+      "trip_no": 12,
+      "restart_delay_s": 420,
+      "summary_ko": "평균토크가 Compressor 허용 수준 이상으로 지속될 때 발생하는 Trip이다.",
+      "csv_observable": true,
+      "csv_required_columns": [
+        {
+          "column_index": 20,
+          "canonical_name": "Trip",
+          "role": "Trip 12 발생 여부 확인"
+        },
+        {
+          "column_index": 19,
+          "canonical_name": "Avg_Torque",
+          "role": "평균토크 과다 여부 확인"
+        },
+        {
+          "column_index": 0,
+          "canonical_name": "Time",
+          "role": "토크 과다 지속 시간 확인"
+        }
+      ],
+      "csv_optional_columns": [
+        {
+          "column_index": 7,
+          "canonical_name": "Power",
+          "role": "Power 증가 동반 여부 확인"
+        },
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "속도 대비 토크 부담 확인"
+        },
+        {
+          "column_index": 1,
+          "canonical_name": "Imag",
+          "role": "평균토크 상승과 함께 전류벡터 크기가 높게 형성되는지 정성적으로 확인"
+        }
+      ],
+      "csv_analysis_guidance": [
+        "20번 컬럼 Trip 값이 12인지 확인한다.",
+        "19번 Avg_Torque가 상승하여 높은 수준으로 유지되는지 확인한다.",
+        "Avg_Torque 상승이 7번 Power 상승과 동반되는지 확인한다.",
+        "5번 Real_Hz가 낮은 상태에서 Power가 높으면 토크 부담 증가 가능성을 검토한다.",
+        "0번 Time 기준으로 Trip 발생 전 약 5초 이상 Avg_Torque 과다 상태가 지속되는지 확인한다.",
+        "1번 Imag는 정량 판단에 사용하지 않고 평균토크 상승과 함께 높게 형성되는지 정성적으로 참고한다."
+      ],
+      "thresholds": [
+        {
+          "name": "duration",
+          "value": 5,
+          "unit": "s",
+          "csv_column_index": 0,
+          "csv_canonical_name": "Time",
+          "csv_applicable": true
+        },
+        {
+          "name": "torque_limit_by_model",
+          "value": "모델별 상이",
+          "unit": "Nm",
+          "csv_column_index": 19,
+          "csv_canonical_name": "Avg_Torque",
+          "csv_applicable": true
+        }
+      ],
+      "model_specific_trip_levels": {
+        "140cc": 0.75,
+        "130cc": 0.7,
+        "120cc_or_110cc": 0.65,
+        "90cc": 0.55,
+        "75cc": 0.5,
+        "57cc": 0.45
+      },
+      "possible_csv_based_explanation": [
+        "Avg_Torque가 모델별 Trip Level 이상으로 약 5초 이상 유지되고 Trip 12가 발생했다면 토크 Trip 가능성이 높다.",
+        "Power가 함께 증가했다면 압축 부하 증가 또는 운전 부하 과다를 의심할 수 있다.",
+        "Imag는 실제 전류값이 아니므로 토크 Trip 판단의 정성적 보조 신호로만 활용한다."
+      ],
+      "non_csv_reference": [
+        "Te = Power / (2πf) 내부 연산식",
+        "냉기동 최초 1회 60분 동안 평균토크 연산 제외 조건",
+        "매 기동 후 4분 동안 평균토크 연산 제외 조건",
+        "Compressor cc별 Trip Level 선택 기준"
+      ],
+      "solution": {
+        "cause_check": [],
+        "recommended_action": [],
+        "parameter_check": [],
+        "hardware_check": [],
+        "additional_note": ""
+      },
+      "agent_warning": "CSV에 Compressor cc 정보가 없으면 정확한 토크 Trip Level을 선택할 수 없으므로 사용자 입력 또는 Keycode 매핑이 필요하다. Imag는 정량 판단에 사용하지 않는다."
+    },
+    {
+      "trip_key": "WINDING_TEMPERATURE_OVER",
+      "trip_name_ko": "권선온도 Trip",
+      "trip_no": 13,
+      "restart_delay_s": 450,
+      "summary_ko": "추정권선온도가 기준 이상으로 상승할 때 발생하는 Trip이다.",
+      "csv_observable": true,
+      "csv_required_columns": [
+        {
+          "column_index": 20,
+          "canonical_name": "Trip",
+          "role": "Trip 13 발생 여부 확인"
+        },
+        {
+          "column_index": 18,
+          "canonical_name": "R_temp",
+          "role": "추정권선온도 과열 여부 확인"
+        },
+        {
+          "column_index": 0,
+          "canonical_name": "Time",
+          "role": "온도 상승 시점 및 지속 시간 확인"
+        }
+      ],
+      "csv_optional_columns": [
+        {
+          "column_index": 7,
+          "canonical_name": "Power",
+          "role": "Power 증가 동반 여부 확인"
+        },
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "온도 Limit 운전 시 속도 제한 여부 확인"
+        },
+        {
+          "column_index": 19,
+          "canonical_name": "Avg_Torque",
+          "role": "토크 증가 동반 여부 확인"
+        },
+        {
+          "column_index": 1,
+          "canonical_name": "Imag",
+          "role": "열부하 상승과 함께 전류벡터 크기가 높게 형성되는지 정성적으로 확인"
+        }
+      ],
+      "csv_analysis_guidance": [
+        "20번 컬럼 Trip 값이 13인지 확인한다.",
+        "18번 R_temp가 130℃ 이상으로 상승했는지 확인한다.",
+        "R_temp 상승이 7번 Power, 19번 Avg_Torque 상승과 함께 나타나는지 확인한다.",
+        "R_temp가 120℃ 이상에서 반복적으로 높은 상태를 유지하는지도 확인한다.",
+        "5번 Real_Hz가 42Hz 부근으로 제한되는 패턴이 있으면 온도 기반 Limit 운전 가능성을 검토한다.",
+        "1번 Imag는 정량 판단에 사용하지 않고 열부하 상승과 함께 높게 형성되는지 정성적으로 참고한다."
+      ],
+      "thresholds": [
+        {
+          "name": "winding_trip_temperature",
+          "value": 130,
+          "unit": "degC",
+          "csv_column_index": 18,
+          "csv_canonical_name": "R_temp",
+          "csv_applicable": true
+        },
+        {
+          "name": "limit_mode_temperature",
+          "value": 120,
+          "unit": "degC",
+          "csv_column_index": 18,
+          "csv_canonical_name": "R_temp",
+          "csv_applicable": true
+        },
+        {
+          "name": "limit_mode_frequency",
+          "value": 42,
+          "unit": "Hz",
+          "csv_column_index": 5,
+          "csv_canonical_name": "Real_Hz",
+          "csv_applicable": true
+        }
+      ],
+      "possible_csv_based_explanation": [
+        "R_temp가 130℃ 이상으로 상승하고 Trip 13이 발생했다면 권선온도 Trip 가능성이 높다.",
+        "R_temp가 120℃ 이상이고 Real_Hz가 42Hz 부근으로 제한되면 온도 기반 Limit 운전 가능성을 검토한다.",
+        "Imag는 실제 전류값이 아니므로 권선온도 상승 원인 판단의 보조 경향 신호로만 활용한다."
+      ],
+      "non_csv_reference": [
+        "정지 시 권선 저항 기반 온도 추정 로직",
+        "120℃ 이상 및 연속 5회 Trip 시 Limit 운전 조건",
+        "Main 주파수 지령 무시 조건"
+      ],
+      "solution": {
+        "cause_check": [],
+        "recommended_action": [],
+        "parameter_check": [],
+        "hardware_check": [],
+        "additional_note": ""
+      },
+      "agent_warning": "CSV에는 권선 저항 기반 추정 과정과 누적 Trip 횟수 정보가 없으므로 Limit 운전 여부는 주파수 패턴으로 간접 확인한다. Imag는 정량 판단에 사용하지 않는다."
+    }
+  ]
+}
