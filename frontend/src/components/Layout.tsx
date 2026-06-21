@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { BarChart3, FileText, LogOut } from "lucide-react";
+import { BarChart3, FileText, LogOut, ServerCrash } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -15,7 +15,7 @@ function verdictColor(v: string) {
 
 export default function Layout() {
   const { role, setRole } = useRole();
-  const { history, selected, setSelected } = useApp();
+  const { history, selected, setSelected, backendUp } = useApp();
   const navigate = useNavigate();
   const [code, setCode] = useState("");
   const [err, setErr] = useState(false);
@@ -43,14 +43,9 @@ export default function Layout() {
               <p className="px-1 text-xs text-muted-foreground">분석 기록이 없습니다.</p>
             ) : (
               history.map((h, i) => (
-                <button
-                  key={i}
-                  onClick={() => { setSelected(h); navigate("/history"); }}
-                  className={cn(
-                    "w-full text-left rounded-md px-3 py-2 transition-colors",
-                    selected === h ? "bg-secondary" : "hover:bg-secondary/60"
-                  )}
-                >
+                <button key={i} onClick={() => { setSelected(h); navigate("/history"); }}
+                  className={cn("w-full text-left rounded-md px-3 py-2 transition-colors",
+                    selected === h ? "bg-secondary" : "hover:bg-secondary/60")}>
                   <p className="text-xs font-medium truncate">{h.파일명}</p>
                   <p className="text-[11px] text-muted-foreground truncate">
                     <span className={verdictColor(h.판정)}>{h.판정}</span>
@@ -87,8 +82,23 @@ export default function Layout() {
         </div>
       </aside>
 
-      <main className="flex-1 p-6 overflow-auto">
-        <Outlet />
+      <main className="flex-1 overflow-auto">
+        {backendUp === false && (
+          <div className="flex items-start gap-2 border-b bg-destructive/10 text-destructive px-6 py-3 text-sm">
+            <ServerCrash className="h-4 w-4 mt-0.5 shrink-0" />
+            <div>
+              <p className="font-medium">백엔드 서버에 연결할 수 없습니다.</p>
+              <p className="text-xs mt-0.5 text-destructive/80">
+                터미널에서 백엔드를 실행하세요:&nbsp;
+                <code className="bg-destructive/10 px-1 rounded">cd backend &amp;&amp; uv run uvicorn main:app --reload --port 8000</code>
+                &nbsp;(Ollama 앱도 실행 필요)
+              </p>
+            </div>
+          </div>
+        )}
+        <div className="p-6">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

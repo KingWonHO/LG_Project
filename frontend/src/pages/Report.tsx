@@ -23,13 +23,9 @@ export default function Report() {
   const run = async () => {
     if (!lastResult) { setErr("먼저 '사용자 분석'에서 파일을 분석하세요."); return; }
     setLoading(true); setErr(null);
-    try {
-      setData(await api.report(lastResult));
-    } catch (e: any) {
-      setErr("리포트 생성 실패: " + e.message);
-    } finally {
-      setLoading(false);
-    }
+    try { setData(await api.report(lastResult)); }
+    catch (e: any) { setErr("리포트 생성 실패: " + e.message); }
+    finally { setLoading(false); }
   };
 
   return (

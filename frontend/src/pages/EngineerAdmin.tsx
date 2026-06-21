@@ -16,12 +16,11 @@ function SaveState({ state }: { state: string }) {
 
 export default function EngineerAdmin() {
   const { role } = useRole();
-
   const [trips, setTrips] = useState<TripCode[]>([]);
   const [baselines, setBaselines] = useState<Baseline[]>([]);
   const [promptVer, setPromptVer] = useState("");
   const [promptText, setPromptText] = useState("");
-  const [s, setS] = useState<{ trip: string; base: string; prompt: string }>({ trip: "", base: "", prompt: "" });
+  const [s, setS] = useState({ trip: "", base: "", prompt: "" });
 
   useEffect(() => {
     if (role !== "engineer") return;
@@ -41,9 +40,9 @@ export default function EngineerAdmin() {
   }
 
   const setTrip = (i: number, k: keyof TripCode, v: any) =>
-    setTrips((prev) => prev.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+    setTrips((p) => p.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
   const addTrip = () =>
-    setTrips((prev) => [...prev, { trip_no: 0, trip_key: "", trip_name_ko: "", summary_ko: "", restart_delay_s: null, solution: null }]);
+    setTrips((p) => [...p, { trip_no: 0, trip_key: "", trip_name_ko: "", summary_ko: "", restart_delay_s: null, solution: null }]);
   const saveTrips = async () => {
     setS((p) => ({ ...p, trip: "saving" }));
     try { await api.putTripCodes(trips); setS((p) => ({ ...p, trip: "saved" })); setTrips(await api.getTripCodes()); }
@@ -51,9 +50,9 @@ export default function EngineerAdmin() {
   };
 
   const setBase = (i: number, k: keyof Baseline, v: any) =>
-    setBaselines((prev) => prev.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+    setBaselines((p) => p.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
   const addBase = () =>
-    setBaselines((prev) => [...prev, { feature_name: "", min_val: null, max_val: null, unit: null }]);
+    setBaselines((p) => [...p, { feature_name: "", min_val: null, max_val: null, unit: null }]);
   const saveBase = async () => {
     setS((p) => ({ ...p, base: "saving" }));
     try { await api.putBaseline(baselines); setS((p) => ({ ...p, base: "saved" })); setBaselines(await api.getBaseline()); }
@@ -82,12 +81,10 @@ export default function EngineerAdmin() {
           <TabsTrigger value="prompt">Prompt</TabsTrigger>
         </TabsList>
 
-        {/* Trip Code (ENG-002 / DB-003) */}
         <TabsContent value="trip">
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0">
-              <CardTitle>Trip Code 등록/수정</CardTitle>
-              <SaveState state={s.trip} />
+              <CardTitle>Trip Code 등록/수정</CardTitle><SaveState state={s.trip} />
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="overflow-x-auto">
@@ -121,12 +118,10 @@ export default function EngineerAdmin() {
           </Card>
         </TabsContent>
 
-        {/* 정상 기준 (ENG-003 / DB-004) */}
         <TabsContent value="baseline">
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0">
-              <CardTitle>정상 기준 등록/수정</CardTitle>
-              <SaveState state={s.base} />
+              <CardTitle>정상 기준 등록/수정</CardTitle><SaveState state={s.base} />
             </CardHeader>
             <CardContent className="space-y-3">
               {baselines.map((b, i) => (
@@ -146,12 +141,10 @@ export default function EngineerAdmin() {
           </Card>
         </TabsContent>
 
-        {/* Prompt (ENG-005 / DB-005) */}
         <TabsContent value="prompt">
           <Card>
             <CardHeader className="flex-row items-center justify-between space-y-0">
-              <CardTitle>Prompt 등록/수정</CardTitle>
-              <SaveState state={s.prompt} />
+              <CardTitle>Prompt 등록/수정</CardTitle><SaveState state={s.prompt} />
             </CardHeader>
             <CardContent className="space-y-2">
               <Input placeholder="버전 (예: v1)" value={promptVer} onChange={(e) => setPromptVer(e.target.value)} className="max-w-[200px]" />
