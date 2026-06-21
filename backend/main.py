@@ -17,6 +17,7 @@ from pydantic import BaseModel
 
 from src.config import settings
 from src import db_manager
+from src import llm_report
 
 app = FastAPI(title="LG Comp 확인 에이전트 API", version="0.1.0")
 
@@ -208,9 +209,24 @@ def put_prompt(body: PromptBody) -> dict:
 # ---------------------------------------------------------------------------
 @app.post("/api/report")
 def report(analysis: dict) -> dict:
-    # TODO: rag_engine → llm_report(Qwen) → report_generator (RPT-001/002)
-    return {
-        "summary": "Trip 3회 감지, CoolingPower 초과로 관리필요.",
-        "causes": ["냉매 부족 가능성", "컴프 과부하"],
-        "actions": ["냉매 충전량 점검", "컴프 전류 파형 재측정"],
+    """분석 결과(dict) → 로컬 LLM 요약 생성 (LLM-001). RAG/PDF는 추후."""
+    trip = analysis.get("trip") or {}
+    baseline = analysis.get("baseline") or {}
+    quality = analysis.get("quality") or {}
+    out_of_range = baseline.get("out_of_range") or []
+
+    # analyze 응답 키 → llm_report 입력 스키마로 매핑
+    llm_input = {
+        "final_judgement": analysis.get("verdict", "UNKNOWN"),
+        "trip_count": trip.get("count", 0),
+        "abnormal_items": out_of_range,
+        "baseline_deviation": [
+            {"column": c, "description": "정상 baseline 이탈"} for c in out_of_range
+        ],
+        "data_quality": f"누락 {quality.get('missing', 0)}건, 이상치 {quality.get('outliers', 0)}건",
+        "root_cause_candidates": [],
+        "recommended_actions": [],
     }
+
+    summary = llm_report.generate_llm_summary(llm_input, rag_results=[])
+    return {"summary": summary, "model": llm_report.get_local_model_name()}

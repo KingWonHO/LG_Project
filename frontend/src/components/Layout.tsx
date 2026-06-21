@@ -15,7 +15,7 @@ function verdictColor(v: string) {
 
 export default function Layout() {
   const { role, setRole } = useRole();
-  const { history, selectedId, setSelectedId } = useApp();
+  const { history, selected, setSelected } = useApp();
   const navigate = useNavigate();
   const [code, setCode] = useState("");
   const [err, setErr] = useState(false);
@@ -26,46 +26,43 @@ export default function Layout() {
   return (
     <div className="flex h-screen">
       <aside className="w-64 shrink-0 border-r bg-card flex flex-col">
-        {/* 상단 로고 */}
         <div className="px-4 pt-4 pb-2">
           <h1 className="text-sm font-medium">LG Comp 확인 에이전트</h1>
           <p className="text-xs text-muted-foreground">분석 자동화</p>
         </div>
 
-        {/* 고정 메뉴 2개 */}
         <nav className="flex flex-col gap-1 px-3">
           <NavLink to="/" end className={link}><BarChart3 className="h-4 w-4" /> 사용자 분석</NavLink>
           <NavLink to="/report" className={link}><FileText className="h-4 w-4" /> 리포트</NavLink>
         </nav>
 
-        {/* 분석 이력 (쌓이는 스크롤 리스트) */}
         <div className="mt-3 flex-1 min-h-0 flex flex-col border-t pt-3">
           <p className="px-4 pb-2 text-xs font-medium text-muted-foreground">분석 이력</p>
           <div className="flex-1 overflow-y-auto px-3 space-y-1">
             {history.length === 0 ? (
               <p className="px-1 text-xs text-muted-foreground">분석 기록이 없습니다.</p>
             ) : (
-              history.map((h) => (
+              history.map((h, i) => (
                 <button
-                  key={h.id}
-                  onClick={() => { setSelectedId(h.id); navigate("/history"); }}
+                  key={i}
+                  onClick={() => { setSelected(h); navigate("/history"); }}
                   className={cn(
                     "w-full text-left rounded-md px-3 py-2 transition-colors",
-                    selectedId === h.id ? "bg-secondary" : "hover:bg-secondary/60"
+                    selected === h ? "bg-secondary" : "hover:bg-secondary/60"
                   )}
                 >
-                  <p className="text-xs font-medium truncate">{h.filename}</p>
+                  <p className="text-xs font-medium truncate">{h.파일명}</p>
                   <p className="text-[11px] text-muted-foreground truncate">
-                    {h.trip} · <span className={verdictColor(h.verdict)}>{h.verdict}</span>
+                    <span className={verdictColor(h.판정)}>{h.판정}</span>
+                    {h.행수 != null ? ` · ${h.행수.toLocaleString()}행` : ""}
                   </p>
-                  <p className="text-[10px] text-muted-foreground/70">{h.time}</p>
+                  <p className="text-[10px] text-muted-foreground/70">{h.일시}</p>
                 </button>
               ))
             )}
           </div>
         </div>
 
-        {/* 접근 권한 (하단 고정) */}
         <div className="border-t p-4">
           <p className="mb-2 text-xs text-muted-foreground">접근 권한</p>
           {role === "engineer" ? (
