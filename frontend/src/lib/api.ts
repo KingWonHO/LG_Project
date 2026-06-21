@@ -36,7 +36,7 @@ export type Baseline = {
 };
 
 export type PromptData = { version: string | null; text: string };
-export type ReportData = { summary: string; model?: string };
+export type ReportData = { summary: string; model?: string; rag_context?: string };
 
 const jsonHeaders = { "Content-Type": "application/json" };
 

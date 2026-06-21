@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Sparkles, Loader2, Download, AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { Sparkles, Loader2, Download, AlertTriangle, CheckCircle2, XCircle, BookText } from "lucide-react";
 import { api } from "@/lib/api";
 import { useApp } from "@/context";
 
@@ -35,7 +35,8 @@ export default function Report() {
       `- 판정: ${lastResult?.verdict ?? "-"}\n` +
       `- Trip: ${lastResult?.trip.count ?? 0}회\n` +
       `- 모델: ${reportData.model ?? "-"}\n\n` +
-      `## 요약\n\n${reportData.summary}\n`;
+      `## 요약\n\n${reportData.summary}\n` +
+      (reportData.rag_context ? `\n## RAG 참고 자료\n\n${reportData.rag_context}\n` : "");
     const blob = new Blob([md], { type: "text/markdown;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -92,6 +93,20 @@ export default function Report() {
                   <div className="flex-1 rounded-lg border bg-muted/40 p-4 text-sm leading-relaxed whitespace-pre-wrap">
                     {reportData.summary}
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {reportData?.rag_context && (
+            <Card>
+              <CardHeader className="flex-row items-center gap-2 space-y-0">
+                <BookText className="h-4 w-4 text-muted-foreground" />
+                <CardTitle className="text-base">RAG 참고 자료 (유사 Trip Code)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="rounded-lg border bg-muted/20 p-4 text-xs leading-relaxed whitespace-pre-wrap text-muted-foreground">
+                  {reportData.rag_context}
                 </div>
               </CardContent>
             </Card>
