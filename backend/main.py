@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from src.config import settings
 from src import db_manager
 from src import llm_report
+from src import rag_engine
 # ANA-001~007 분석 파이프라인 (src 모듈 호출 전용 — 모듈 자체는 수정하지 않음)
 from src import (
     file_parser,
@@ -54,6 +55,8 @@ def on_startup() -> None:
         seed_path = Path(__file__).parent / "data" / "trip_case.json"
         if seed_path.exists():
             db_manager.seed_trip_codes_from_json(seed_path)
+    # RAG-001: Trip Code 지식 데이터 ChromaDB 인덱싱
+    rag_engine.index_trip_codes_from_db()
 
 
 app.add_middleware(
@@ -252,11 +255,14 @@ def put_prompt(body: PromptBody) -> dict:
 # ---------------------------------------------------------------------------
 @app.post("/api/report")
 def report(analysis: dict) -> dict:
-    """분석 결과(dict) → 로컬 LLM 요약 생성 (LLM-001). RAG/PDF는 추후."""
+    """분석 결과(dict) → RAG 검색 + 로컬 LLM 요약 생성 (RAG-002, LLM-001)."""
     trip = analysis.get("trip") or {}
     baseline = analysis.get("baseline") or {}
     quality = analysis.get("quality") or {}
     out_of_range = baseline.get("out_of_range") or []
+
+    # RAG-002: 분석 결과와 유사한 Trip Code 검색 → LLM 컨텍스트
+    rag_context = rag_engine.build_rag_context(analysis)
 
     # analyze 응답 키 → llm_report.generate_llm_summary 입력 스키마로 매핑
     llm_input = {
@@ -267,6 +273,14 @@ def report(analysis: dict) -> dict:
             {"column": c, "description": "정상 baseline 이탈"} for c in out_of_range
         ],
         "data_quality": f"누락 {quality.get('missing', 0)}건, 이상치 {quality.get('outliers', 0)}건",
+        "rag_context": rag_context,
     }
     summary = llm_report.generate_llm_summary(llm_input)
-    return {"summary": summary, "model": llm_report.get_local_model_name()}
+    return {"summary": summary, "model": llm_report.get_local_model_name(), "rag_context": rag_context}
+
+
+@app.post("/api/rag/index")
+def rag_index() -> dict:
+    """DB의 Trip Code를 ChromaDB에 재인덱싱 (RAG-001 수동 트리거)."""
+    count = rag_engine.index_trip_codes_from_db()
+    return {"indexed": count}
