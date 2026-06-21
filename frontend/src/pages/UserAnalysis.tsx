@@ -1,8 +1,9 @@
 import { useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea, Legend,
 } from "recharts";
-import { Upload, Play, Download, AlertTriangle, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Upload, Play, FileText, AlertTriangle, CheckCircle2, XCircle, Loader2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -26,9 +27,9 @@ function VerdictBadge({ verdict }: { verdict: string | null }) {
 const PREFERRED = ["Iqe", "CoolingPower", "Power", "DC_Link", "Ide", "Initial_Delay"];
 
 export default function UserAnalysis() {
-  // 화면 상태는 context에 보관 → 리포트 등으로 이동 후 돌아와도 유지
   const { ua, setUa, refreshHistory, setLastResult } = useApp();
   const { file, parsed, cols, result } = ua;
+  const navigate = useNavigate();
 
   const [parsing, setParsing] = useState(false);
   const [running, setRunning] = useState(false);
@@ -190,13 +191,16 @@ export default function UserAnalysis() {
         </Card>
 
         <div className="flex gap-2">
-          <Button variant="outline" className="flex-1" disabled={!result}><Download className="h-4 w-4" /> 리포트 생성</Button>
-          <Button variant="outline" className="flex-1" disabled={!result}>리포트 다운로드</Button>
+          <Button className="flex-1" disabled={!result} onClick={() => navigate("/report")}>
+            <FileText className="h-4 w-4" /> 리포트 생성·보기
+          </Button>
         </div>
       </TabsContent>
 
       <TabsContent value="learning" className="mt-3">
-        <Card><CardContent className="pt-6 text-sm text-muted-foreground">학습 기능은 목업 단계입니다.</CardContent></Card>
+        <Card><CardContent className="pt-6 text-sm text-muted-foreground">
+          학습 기능은 추후 제공 예정입니다. (정상 baseline 학습/갱신)
+        </CardContent></Card>
       </TabsContent>
     </Tabs>
   );

@@ -96,9 +96,7 @@ export default function Layout() {
             </div>
           </div>
         )}
-        <div className="p-6">
-          <Outlet />
-        </div>
+        <div className="p-6"><Outlet /></div>
       </main>
     </div>
   );

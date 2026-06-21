@@ -1,10 +1,9 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, type HistoryItem, type AnalyzeResponse } from "@/lib/api";
+import { api, type HistoryItem, type AnalyzeResponse, type ReportData } from "@/lib/api";
 import type { ParsedFile } from "@/lib/parseFile";
 
 export type Role = "user" | "engineer";
 
-// 사용자 분석 화면 상태 (라우트 이동해도 유지)
 export type UAState = {
   file: File | null;
   parsed: ParsedFile | null;
@@ -24,6 +23,8 @@ type Ctx = {
   backendUp: boolean | null;
   ua: UAState;
   setUa: (patch: Partial<UAState>) => void;
+  reportData: ReportData | null;
+  setReportData: (r: ReportData | null) => void;
 };
 
 const EMPTY_UA: UAState = { file: null, parsed: null, cols: [], result: null };
@@ -40,6 +41,8 @@ const AppContext = createContext<Ctx>({
   backendUp: null,
   ua: EMPTY_UA,
   setUa: () => {},
+  reportData: null,
+  setReportData: () => {},
 });
 
 export function RoleProvider({ children }: { children: ReactNode }) {
@@ -49,10 +52,11 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   const [lastResult, setLastResult] = useState<AnalyzeResponse | null>(null);
   const [backendUp, setBackendUp] = useState<boolean | null>(null);
   const [ua, setUaState] = useState<UAState>(EMPTY_UA);
+  const [reportData, setReportData] = useState<ReportData | null>(null);
   const setUa = (patch: Partial<UAState>) => setUaState((prev) => ({ ...prev, ...patch }));
 
   const refreshHistory = async () => {
-    try { setHistory(await api.history()); } catch { /* 백엔드 미기동 시 무시 */ }
+    try { setHistory(await api.history()); } catch { /* 무시 */ }
   };
 
   useEffect(() => {
@@ -70,7 +74,7 @@ export function RoleProvider({ children }: { children: ReactNode }) {
   return (
     <AppContext.Provider
       value={{ role, setRole, history, refreshHistory, selected, setSelected,
-               lastResult, setLastResult, backendUp, ua, setUa }}
+               lastResult, setLastResult, backendUp, ua, setUa, reportData, setReportData }}
     >
       {children}
     </AppContext.Provider>
