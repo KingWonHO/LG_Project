@@ -11,7 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+import pandas as pd
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -57,6 +58,13 @@ def on_startup() -> None:
             db_manager.seed_trip_codes_from_json(seed_path)
     # RAG-001: Trip Code 지식 데이터 ChromaDB 인덱싱
     rag_engine.index_trip_codes_from_db()
+    # RAG-001: DPS/NODPS 컬럼 스키마 JSON → ChromaDB 인덱싱 (column_index 순서 반영)
+    dps_path = Path(__file__).parent / "data" / "DPS_columns.json"
+    nodps_path = Path(__file__).parent / "data" / "NODPS_columns.json"
+    if dps_path.exists() and nodps_path.exists():
+        rag_engine.index_column_schemas_from_json(dps_path, nodps_path)
+    # RAG-002: 저장된 RAG 참고 예시 인덱싱
+    rag_engine.index_rag_examples()
 
 
 app.add_middleware(
@@ -284,3 +292,88 @@ def rag_index() -> dict:
     """DB의 Trip Code를 ChromaDB에 재인덱싱 (RAG-001 수동 트리거)."""
     count = rag_engine.index_trip_codes_from_db()
     return {"indexed": count}
+
+
+@app.post("/api/rag/index-columns")
+def rag_index_columns() -> dict:
+    """DPS/NODPS 컬럼 스키마 JSON을 ChromaDB에 재인덱싱 (RAG-001, column_index 순서 반영)."""
+    dps_path = Path(__file__).parent / "data" / "DPS_columns.json"
+    nodps_path = Path(__file__).parent / "data" / "NODPS_columns.json"
+    if not dps_path.exists() or not nodps_path.exists():
+        raise HTTPException(status_code=404, detail="컬럼 스키마 JSON 파일 없음")
+    count = rag_engine.index_column_schemas_from_json(dps_path, nodps_path)
+    return {"indexed": count}
+
+
+@app.post("/api/rag/example")
+async def create_rag_example(
+    file: UploadFile = File(...),
+    prompt: str = Form(...),
+) -> dict:
+    """엔지니어가 CSV + 프롬프트 제공 → LLM 답변 생성 → DB + ChromaDB에 저장.
+
+    저장 항목: CSV 컬럼 값 요약(JSON), 프롬프트(Text), LLM 답변(Text)
+    """
+    content = await file.read()
+    try:
+        df = column_mapper.map_columns(file_parser.parse_file(file.filename, content))
+    except file_parser.FileParseError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    # CSV 컬럼 값: 수치형 컬럼은 기초 통계, 비수치형은 고유값 수
+    csv_column_values: dict = {}
+    for col in df.columns:
+        if pd.api.types.is_numeric_dtype(df[col]):
+            csv_column_values[col] = {
+                "mean": round(float(df[col].mean()), 4),
+                "min": round(float(df[col].min()), 4),
+                "max": round(float(df[col].max()), 4),
+            }
+        else:
+            csv_column_values[col] = {"unique_count": int(df[col].nunique())}
+
+    # LLM 답변 생성: CSV 컬럼 요약과 엔지니어 프롬프트를 함께 전달
+    analysis_json_for_llm = {
+        "final_judgement": "RAG 참고 예시",
+        "trip_count": int((df["Trip_Code"] != 0).sum()) if "Trip_Code" in df.columns else 0,
+        "abnormal_items": [],
+        "baseline_deviation": [],
+        "data_quality": f"컬럼 수: {len(df.columns)}, 행 수: {len(df)}",
+    }
+    answer = llm_report.generate_llm_summary(
+        analysis_json_for_llm,
+        rag_results=[f"엔지니어 질문: {prompt}"],
+    )
+
+    # DB 저장
+    example = db_manager.save_rag_example(
+        csv_column_values=csv_column_values,
+        prompt=prompt,
+        answer=answer,
+    )
+
+    # ChromaDB 재인덱싱 (새로 저장된 예시 포함)
+    rag_engine.index_rag_examples()
+
+    return {
+        "example_id": example.id,
+        "columns": list(csv_column_values.keys()),
+        "prompt": prompt,
+        "answer": answer,
+    }
+
+
+@app.get("/api/rag/examples")
+def get_rag_examples() -> list[dict]:
+    """저장된 RAG 참고 예시 목록 조회."""
+    rows = db_manager.get_all_rag_examples()
+    return [
+        {
+            "example_id": r.id,
+            "column_count": len(r.csv_column_values),
+            "prompt": r.prompt,
+            "answer": r.answer[:300],
+            "created_at": r.created_at.strftime("%Y-%m-%d %H:%M"),
+        }
+        for r in rows
+    ]
