@@ -444,3 +444,47 @@ def update_baseline(feature_name: str, **fields: Any) -> Baseline | None:
         session.flush()
         session.refresh(bl)
         return bl
+
+
+# ---------------------------------------------------------------------------
+# RAG 참고 예시 모델 (CSV 컬럼 값 + 프롬프트 + 답변)
+# ---------------------------------------------------------------------------
+
+
+class RagExample(Base):
+    """엔지니어가 등록한 RAG 참고 예시 (CSV 컬럼 값 + 프롬프트 + 답변)."""
+
+    __tablename__ = "rag_examples"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    csv_column_values: Mapped[dict] = mapped_column(JSON, nullable=False)
+    prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    answer: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+def save_rag_example(
+    csv_column_values: dict,
+    prompt: str,
+    answer: str,
+) -> RagExample:
+    with get_session() as session:
+        example = RagExample(
+            csv_column_values=csv_column_values,
+            prompt=prompt,
+            answer=answer,
+        )
+        session.add(example)
+        session.flush()
+        session.refresh(example)
+        return example
+
+
+def get_all_rag_examples() -> list[RagExample]:
+    with get_session() as session:
+        return session.query(RagExample).order_by(RagExample.created_at.desc()).all()
+
+
+def get_rag_example(example_id: int) -> RagExample | None:
+    with get_session() as session:
+        return session.get(RagExample, example_id)

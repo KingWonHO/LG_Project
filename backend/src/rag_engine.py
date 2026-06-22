@@ -22,6 +22,8 @@ _embedder: SentenceTransformer | None = None
 _chroma_client: chromadb.ClientAPI | None = None
 
 COLLECTION_TRIP = "trip_codes"
+COLLECTION_COLUMNS = "column_schemas"
+COLLECTION_EXAMPLES = "rag_examples"
 
 
 def _get_embedder() -> SentenceTransformer:
@@ -141,6 +143,103 @@ def search_trip_codes(query: str, n_results: int = 5) -> list[dict]:
             "trip_no": meta.get("trip_no"),
             "trip_key": meta.get("trip_key", ""),
             "trip_name_ko": meta.get("trip_name_ko", ""),
+            "document": doc,
+            "distance": round(dist, 4),
+        }
+        for doc, meta, dist in zip(
+            results["documents"][0],
+            results["metadatas"][0],
+            results["distances"][0],
+        )
+    ]
+
+
+def index_column_schemas_from_json(dps_path: str | Path, nodps_path: str | Path) -> int:
+    """DPS/NODPS 컬럼 스키마 JSON → ChromaDB COLLECTION_COLUMNS에 인덱싱 (RAG-001).
+
+    JSON의 column_index 순서를 그대로 반영하여 각 컬럼을 문서로 변환 후 저장.
+    미사용(category=unused) 컬럼은 제외.
+    """
+    import json
+
+    collection = _get_collection(COLLECTION_COLUMNS)
+    embedder = _get_embedder()
+
+    ids, documents, metadatas = [], [], []
+    for path in (Path(dps_path), Path(nodps_path)):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data_type = data.get("data_type", "")
+        for col in sorted(data.get("columns", []), key=lambda c: c["column_index"]):
+            if col.get("category") == "unused":
+                continue
+            col_idx = col["column_index"]
+            canonical = col["canonical_name"]
+            display = col.get("display_name_ko", "")
+            desc = col.get("description_ko", "")
+            points = " / ".join(col.get("analysis_point", []))
+            doc = (
+                f"[{data_type}] 컬럼{col_idx}: {canonical} ({display})\n"
+                f"{desc}\n"
+                f"분석 포인트: {points}"
+            )
+            ids.append(f"{data_type}_{col_idx}")
+            documents.append(doc)
+            metadatas.append({
+                "data_type": data_type,
+                "column_index": col_idx,
+                "canonical_name": canonical,
+            })
+
+    if not ids:
+        return 0
+    embeddings = embedder.encode(documents, normalize_embeddings=True).tolist()
+    collection.upsert(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings)
+    return len(ids)
+
+
+def index_rag_examples() -> int:
+    """DB의 RagExample들을 ChromaDB COLLECTION_EXAMPLES에 인덱싱."""
+    from src.db_manager import get_all_rag_examples
+
+    rows = get_all_rag_examples()
+    if not rows:
+        return 0
+
+    collection = _get_collection(COLLECTION_EXAMPLES)
+    embedder = _get_embedder()
+
+    ids, documents, metadatas = [], [], []
+    for row in rows:
+        doc = f"[프롬프트] {row.prompt}\n[답변] {row.answer}"
+        ids.append(str(row.id))
+        documents.append(doc)
+        metadatas.append({
+            "example_id": row.id,
+            "created_at": row.created_at.strftime("%Y-%m-%d %H:%M"),
+        })
+
+    embeddings = embedder.encode(documents, normalize_embeddings=True).tolist()
+    collection.upsert(ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings)
+    return len(ids)
+
+
+def search_rag_examples(query: str, n_results: int = 3) -> list[dict]:
+    """저장된 RAG 참고 예시 중 쿼리와 유사한 것 검색."""
+    collection = _get_collection(COLLECTION_EXAMPLES)
+    if collection.count() == 0:
+        return []
+
+    embedder = _get_embedder()
+    query_embedding = embedder.encode([query], normalize_embeddings=True).tolist()
+    results = collection.query(
+        query_embeddings=query_embedding,
+        n_results=min(n_results, collection.count()),
+        include=["documents", "metadatas", "distances"],
+    )
+
+    return [
+        {
+            "example_id": meta.get("example_id"),
             "document": doc,
             "distance": round(dist, 4),
         }

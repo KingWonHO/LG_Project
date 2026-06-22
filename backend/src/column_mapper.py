@@ -1,22 +1,29 @@
 """column_mapper 모듈: 컬럼 자동 매핑 (ANA-002).
 
 업로드 파일마다 다른 컬럼명을 표준 컬럼명으로 매핑한다.
-표준 컬럼명은 trip_analyzer/baseline_analyzer/result_builder 등 후속 모듈이 공통으로 사용한다.
+DPS/NODPS Raw Data(21컬럼)는 JSON의 column_index 순서를 기준으로 매핑하고,
+그 외 형식은 기존 컬럼명 기반 별칭 매핑을 사용한다.
 """
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pandas as pd
 
-# 표준 컬럼명 -> 별칭(다양한 원본 표기) 매핑 테이블.
-# 별칭은 정규화(소문자, 공백/언더스코어/하이픈 제거) 후 비교한다.
+_JSON_DIR = Path(__file__).parent.parent / "data"
+
+# DPS/NODPS Raw Data 컬럼 수 (0~20, 총 21개)
+_RAW_COLUMN_COUNT = 21
+
+# 컬럼명 기반 별칭 매핑 (DPS/NODPS 외 형식 폴백용)
 STANDARD_COLUMN_ALIASES: dict[str, list[str]] = {
     "Trip_Code": ["trip_code", "tripcode", "trip code", "트립코드", "트립 코드"],
     "Time": ["time"],
     "컴프전류": ["컴프전류", "컴프 전류", "comp_current", "compcurrent"],
     "전압": ["전압", "voltage", "volt"],
     "RT": ["rt"],
-    # 전류/기준값 계열 (Ide/Iqe 계열) — 정상데이터/관리필요데이터/PCB변경 트립 샘플 기준
     "Ide": ["ide", "ide(0.01)"],
     "Iqe": ["iqe"],
     "Idef": ["idef"],
@@ -24,7 +31,6 @@ STANDARD_COLUMN_ALIASES: dict[str, list[str]] = {
     "Ide_ref": ["ide_ref", "ide ref"],
     "Iqe_ref": ["iqe_ref", "iqeref", "iqe ref"],
     "REF": ["ref"],
-    # Trip/Relay/NC 제어 계열
     "운전": ["운전"],
     "Comp_On": ["comp_on", "comp on", "comp_on_time", "comp on time"],
     "Relay": ["relay"],
@@ -36,7 +42,6 @@ STANDARD_COLUMN_ALIASES: dict[str, list[str]] = {
     "LQC_Count": ["lqc_count", "lqc count", "lqc_coun", "lqc coun"],
     "추가각": ["추가각"],
     "진각합": ["진각합"],
-    # 출력/온도/펄스/제어 계열
     "Power": ["power"],
     "F_Power": ["f_power", "f power"],
     "R+F_Power": ["r+f_power", "r+f power"],
@@ -60,7 +65,6 @@ STANDARD_COLUMN_ALIASES: dict[str, list[str]] = {
 
 
 def _normalize(name: str) -> str:
-    """컬럼명 비교를 위해 정규화한다 (소문자, 공백/언더스코어/하이픈 제거)."""
     return name.strip().lower().replace(" ", "").replace("_", "").replace("-", "")
 
 
@@ -72,10 +76,60 @@ _ALIAS_TO_STANDARD: dict[str, str] = {
 
 
 def map_column_name(raw_name: str) -> str:
-    """원본 컬럼명을 표준 컬럼명으로 매핑한다. 매칭되는 표준 컬럼이 없으면 원본을 그대로 반환한다."""
+    """원본 컬럼명을 표준 컬럼명으로 매핑한다. 매칭 없으면 원본 반환."""
     return _ALIAS_TO_STANDARD.get(_normalize(raw_name), raw_name)
 
 
+# ---------------------------------------------------------------------------
+# DPS / NODPS column_index 기반 매핑
+# ---------------------------------------------------------------------------
+
+def _load_index_mapping(data_type: str) -> dict[int, str]:
+    """JSON에서 column_index → canonical_name 매핑 로드. unused 컬럼 제외."""
+    path = _JSON_DIR / f"{data_type}_columns.json"
+    if not path.exists():
+        return {}
+    data = json.loads(path.read_text(encoding="utf-8"))
+    return {
+        col["column_index"]: col["canonical_name"]
+        for col in data.get("columns", [])
+        if col.get("category") != "unused"
+    }
+
+
+def _detect_data_type(df: pd.DataFrame) -> str | None:
+    """21컬럼 Raw Data의 DPS/NODPS 타입 감지.
+
+    컬럼 수가 21개가 아니면 None 반환 → 이름 기반 폴백 사용.
+    DPS 전용 컬럼명(Trial_Count, 1st_Freq, 2nd_Freq) 존재 여부로 판별하고,
+    판별 불가 시 NODPS 기본값.
+    """
+    if len(df.columns) != _RAW_COLUMN_COUNT:
+        return None
+    normalized = {_normalize(c) for c in df.columns}
+    dps_markers = {"trialcount", "1stfreq", "2ndfreq"}
+    if normalized & dps_markers:
+        return "DPS"
+    nodps_markers = {"waittime"}
+    if normalized & nodps_markers:
+        return "NODPS"
+    return "NODPS"  # 21컬럼이지만 판별 불가 → NODPS 기본값
+
+
 def map_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """DataFrame의 모든 컬럼명을 표준 컬럼명으로 변환한다 (file_parser 결과에 이어서 호출)."""
+    """DataFrame의 컬럼명을 표준 컬럼명으로 변환한다.
+
+    - 21컬럼 Raw Data: JSON column_index 순서 기준 매핑 (DPS/NODPS)
+    - 그 외: 컬럼명 별칭 기반 매핑 (폴백)
+    """
+    data_type = _detect_data_type(df)
+    if data_type:
+        index_map = _load_index_mapping(data_type)
+        if index_map:
+            rename = {
+                col: index_map[idx]
+                for idx, col in enumerate(df.columns)
+                if idx in index_map
+            }
+            return df.rename(columns=rename)
     return df.rename(columns={col: map_column_name(col) for col in df.columns})

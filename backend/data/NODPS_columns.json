@@ -1,0 +1,298 @@
+{
+  "schema_name": "NODPS_column_schema",
+  "schema_version": "1.1.0",
+  "data_type": "NODPS",
+  "description": "NODPS Compressor Raw Data 컬럼 순서 기반 의미 정의. CSV 컬럼명과 관계없이 컬럼 순서를 기준으로 의미를 매핑한다.",
+  "mapping_policy": {
+    "priority": "column_index",
+    "index_base": 0,
+    "note": "0번 컬럼은 시간 컬럼으로 고정한다. 1~20번 컬럼은 Raw Data 신호 컬럼으로 매핑한다. CSV 파일의 실제 컬럼명은 신뢰하지 않는다."
+  },
+  "columns": [
+    {
+      "column_index": 0,
+      "canonical_name": "Time",
+      "display_name_ko": "시간",
+      "description_ko": "Raw Data가 기록된 시간 또는 샘플링 기준 시간축이다.",
+      "unit": "s 또는 ms",
+      "category": "time",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "기동 시점 확인",
+        "Trip 발생 시점 확인",
+        "이상 발생 전후 구간 분석",
+        "그래프 X축 기준으로 사용"
+      ]
+    },
+    {
+      "column_index": 1,
+      "canonical_name": "Imag",
+      "display_name_ko": "전류벡터 크기",
+      "description_ko": "전류벡터의 크기를 의미한다.",
+      "unit": "A",
+      "category": "current",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "과전류 여부 판단",
+        "기동 시 전류 Peak 확인",
+        "부하 증가 또는 Stall 가능성 판단",
+        "Power, Real_Hz, Trip과 함께 이상 원인 분석"
+      ]
+    },
+    {
+      "column_index": 2,
+      "canonical_name": "unused_1",
+      "display_name_ko": "미사용",
+      "description_ko": "현재 분석에 사용하지 않는 컬럼이다.",
+      "unit": "-",
+      "category": "unused",
+      "used_for_analysis": false,
+      "analysis_point": []
+    },
+    {
+      "column_index": 3,
+      "canonical_name": "DC_link",
+      "display_name_ko": "DC Link 전압",
+      "description_ko": "DC Link 전압의 크기를 의미한다. Compressor 정지 시 초기값은 310V로 고정되며, Compressor 운전 시에는 실제 전압값을 측정한다.",
+      "unit": "V",
+      "category": "voltage",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "과전압 Trip 판단",
+        "기동 또는 부하 급변 시 전압 강하 확인",
+        "전원 안정성 및 인버터 입력 상태 확인",
+        "Compressor 정지/운전 상태 구분 보조"
+      ]
+    },
+    {
+      "column_index": 4,
+      "canonical_name": "Ref_Hz",
+      "display_name_ko": "지령주파수",
+      "description_ko": "외부에서 인가한 Compressor 주파수 지령이다. Compressor별 최대/최소 운전 주파수 범위가 존재한다.",
+      "unit": "Hz",
+      "category": "frequency_command",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "외부 운전 요구 조건 확인",
+        "Real_Hz와 비교하여 주파수 추종성 판단",
+        "Ramp_Hz와 비교하여 내부 제한 또는 제어 로직 개입 여부 확인"
+      ]
+    },
+    {
+      "column_index": 5,
+      "canonical_name": "Real_Hz",
+      "display_name_ko": "실제주파수",
+      "description_ko": "실제 Compressor가 동작하고 있는 실시간 속도이다.",
+      "unit": "Hz",
+      "category": "frequency_feedback",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "Compressor 실제 운전 상태 확인",
+        "Ref_Hz 또는 Ramp_Hz 대비 추종성 판단",
+        "기동 실패, 속도 Hunting, Stall 가능성 판단",
+        "Trip 발생 직전 속도 변화 확인"
+      ]
+    },
+    {
+      "column_index": 6,
+      "canonical_name": "unused_2",
+      "display_name_ko": "미사용",
+      "description_ko": "현재 분석에 사용하지 않는 컬럼이다.",
+      "unit": "-",
+      "category": "unused",
+      "used_for_analysis": false,
+      "analysis_point": []
+    },
+    {
+      "column_index": 7,
+      "canonical_name": "Power",
+      "display_name_ko": "출력",
+      "description_ko": "Compressor의 전류값과 속도를 이용하여 실시간으로 계산한 Compressor 출력이다.",
+      "unit": "W",
+      "category": "power",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "Power Trip 판단",
+        "부하 과다 여부 확인",
+        "Imag, Real_Hz, Avg_Torque와 함께 운전 부하 상태 분석",
+        "효율 저하 또는 비정상 소비전력 확인"
+      ]
+    },
+    {
+      "column_index": 8,
+      "canonical_name": "IPM",
+      "display_name_ko": "IPM 온도",
+      "description_ko": "IPM의 온도를 표현한다. 값이 부정확할 수 있고 PCB마다 적용 여부가 다르기 때문에 절대값보다는 경향성 감지용으로 사용한다.",
+      "unit": "degC",
+      "category": "temperature",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "IPM 온도 상승 경향 확인",
+        "전류 또는 Power 증가에 따른 열부하 경향 확인",
+        "PCB별 적용 여부에 따라 참고 신호로만 활용"
+      ],
+      "agent_warning": "IPM 값은 PCB마다 적용 여부와 정확도가 다를 수 있으므로 절대 기준으로 단정하지 않고 경향성 중심으로 해석한다."
+    },
+    {
+      "column_index": 9,
+      "canonical_name": "Wait_Time",
+      "display_name_ko": "대기시간",
+      "description_ko": "Compressor Trip 또는 재기동 시 Compressor의 대기시간을 의미한다.",
+      "unit": "s",
+      "category": "control_state",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "Trip 이후 재기동 대기 상태 확인",
+        "재기동 시퀀스 확인",
+        "Compressor 정지 후 재운전까지의 시간 흐름 확인"
+      ]
+    },
+    {
+      "column_index": 10,
+      "canonical_name": "Ramp_Hz",
+      "display_name_ko": "컴프 내부지령속도",
+      "description_ko": "Compressor를 제어하기 위한 Compressor 내부의 지령속도이다.",
+      "unit": "Hz",
+      "category": "frequency_command",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "내부 제어 지령 확인",
+        "Ref_Hz와 비교하여 내부 제한 로직 개입 여부 확인",
+        "Real_Hz와 비교하여 실제 속도 추종성 판단"
+      ]
+    },
+    {
+      "column_index": 11,
+      "canonical_name": "LeadA",
+      "display_name_ko": "일정 베타각",
+      "description_ko": "모터의 DQ축 일정 베타각이다.",
+      "unit": "deg",
+      "category": "motor_control_angle",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "모터 제어각 상태 확인",
+        "운전 주파수 변화에 따른 기본 베타각 확인",
+        "LeadA_Total 구성 요소로 활용"
+      ]
+    },
+    {
+      "column_index": 12,
+      "canonical_name": "LeadA_FW",
+      "display_name_ko": "약자속 베타각",
+      "description_ko": "약자속 운전 시 추가되는 DQ축 베타각이다.",
+      "unit": "deg",
+      "category": "motor_control_angle",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "약자속 운전 개입 여부 확인",
+        "고속 운전 영역에서 베타각 보상 확인",
+        "전압 제한 또는 고속 운전 제어 상태 분석"
+      ]
+    },
+    {
+      "column_index": 13,
+      "canonical_name": "LeadA_Add",
+      "display_name_ko": "추가 베타각",
+      "description_ko": "추가되는 DQ축 베타각이다.",
+      "unit": "deg",
+      "category": "motor_control_angle",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "추가 제어 보상 개입 여부 확인",
+        "부하 변화 또는 제어 보정 상태 확인",
+        "LeadA_Total 변화 원인 분석"
+      ]
+    },
+    {
+      "column_index": 14,
+      "canonical_name": "LeadA_Total",
+      "display_name_ko": "베타각 총합",
+      "description_ko": "일정 베타각과 추가 베타각을 포함한 베타각 총합이다.",
+      "unit": "deg",
+      "category": "motor_control_angle",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "최종 모터 제어각 확인",
+        "제어각 급변 또는 포화 여부 확인",
+        "센서리스 제어 불안정 가능성 보조 판단"
+      ]
+    },
+    {
+      "column_index": 15,
+      "canonical_name": "MtoC",
+      "display_name_ko": "상위제어기 운전지령",
+      "description_ko": "상위제어기에서 내려오는 Compressor 운전 지령이며 8비트로 구성된다.",
+      "unit": "bit",
+      "category": "control_command",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "상위제어기 운전 지령 상태 확인",
+        "Compressor 운전/정지 명령 확인",
+        "Ref_Hz 변화와 함께 운전 명령 상태 해석"
+      ]
+    },
+    {
+      "column_index": 16,
+      "canonical_name": "unused_3",
+      "display_name_ko": "미사용",
+      "description_ko": "현재 분석에 사용하지 않는 컬럼이다.",
+      "unit": "-",
+      "category": "unused",
+      "used_for_analysis": false,
+      "analysis_point": []
+    },
+    {
+      "column_index": 17,
+      "canonical_name": "unused_4",
+      "display_name_ko": "미사용",
+      "description_ko": "현재 분석에 사용하지 않는 컬럼이다.",
+      "unit": "-",
+      "category": "unused",
+      "used_for_analysis": false,
+      "analysis_point": []
+    },
+    {
+      "column_index": 18,
+      "canonical_name": "R_temp",
+      "display_name_ko": "추정권선온도",
+      "description_ko": "Compressor 권선이 고온으로 인해 파손되는 것을 방지하기 위해 측정 또는 추정하는 권선온도이다.",
+      "unit": "degC",
+      "category": "temperature",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "권선온도 Trip 판단",
+        "장시간 운전 시 열부하 확인",
+        "Imag, Power, Avg_Torque 상승과 함께 권선 온도 상승 경향 분석"
+      ]
+    },
+    {
+      "column_index": 19,
+      "canonical_name": "Avg_Torque",
+      "display_name_ko": "평균토크",
+      "description_ko": "평균토크를 의미한다. 평균토크가 높게 설정되어 전류가 과하게 흐르지 않도록 평균토크를 측정한다.",
+      "unit": "Nm 또는 내부 단위",
+      "category": "torque",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "토크 Trip 판단",
+        "부하 과다 여부 확인",
+        "Imag, Power, Real_Hz와 함께 Compressor 부하 상태 분석",
+        "전류 과다 발생 가능성 보조 판단"
+      ]
+    },
+    {
+      "column_index": 20,
+      "canonical_name": "Trip",
+      "display_name_ko": "보호 Trip 코드",
+      "description_ko": "Compressor 보호동작을 위한 보호 Trip 코드이다. 1~14 범위의 Trip 코드가 존재한다.",
+      "unit": "-",
+      "category": "trip",
+      "used_for_analysis": true,
+      "analysis_point": [
+        "Trip 발생 여부 확인",
+        "Trip Case Rule과 연결하여 이상 유형 해석",
+        "Trip 발생 시점 전후의 Imag, DC_link, Power, Real_Hz, R_temp, Avg_Torque 변화 확인"
+      ]
+    }
+  ]
+}
