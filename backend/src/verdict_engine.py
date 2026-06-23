@@ -18,9 +18,11 @@ NEEDS_ATTENTION = "관리필요"
 FAIL = "FAIL"
 
 # Trip이 이 횟수 이상 반복되면 단순 관리 필요가 아닌 FAIL로 판단한다.
-# 실제 운영 기준값은 rule_manager(ENG-004)의 Rule JSON에서 정해지므로 기본값일 뿐이며,
+# 팀 확인 결과 Trip은 1회만 발생해도 FAIL로 본다 (노이즈성 단발 블립은 trip_analyzer가
+# 이미 운전/REF 활성 여부로 걸러내므로, 여기까지 올라온 count는 전부 진짜 트립으로 간주).
+# 실제 운영 기준값은 rule_manager(ENG-004)의 Rule JSON에서 정해질 수 있으므로 기본값일 뿐이며,
 # decide_trip_verdict/analyze_verdict 호출 시 fail_threshold로 덮어쓸 수 있다.
-TRIP_FAIL_COUNT_THRESHOLD = 5
+TRIP_FAIL_COUNT_THRESHOLD = 1
 
 
 def decide_trip_verdict(trip: dict, fail_threshold: int = TRIP_FAIL_COUNT_THRESHOLD) -> str:
