@@ -193,9 +193,17 @@ def get_analysis_history(limit: int = 50) -> list[dict]:
                 "파일명": f.filename,
                 "행수": f.row_count,
                 "판정": r.verdict,
+                "result_id": r.id,
+                "file_id": f.id,
             }
             for r, f in rows
         ]
+
+
+def get_analysis_result_by_id(result_id: int) -> AnalysisResult | None:
+    """분석 결과 자체의 id로 조회 (히스토리 상세 조회용)."""
+    with get_session() as session:
+        return session.get(AnalysisResult, result_id)
 
 
 def get_analysis_result(file_id: int) -> AnalysisResult | None:
