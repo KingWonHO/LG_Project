@@ -15,7 +15,16 @@ export type AnalyzeResponse = {
   result_id: number;
 };
 
-export type HistoryItem = { 일시: string; 파일명: string; 행수: number | null; 판정: string };
+export type HistoryItem = {
+  일시: string;
+  파일명: string;
+  행수: number | null;
+  판정: string;
+  result_id: number;
+  file_id: number;
+};
+
+export type HistoryDetail = AnalyzeResponse & { series: Record<string, number>[] };
 
 export type TripCode = {
   trip_no: number;
@@ -50,6 +59,7 @@ export const api = {
   },
 
   history: () => fetch(`${BASE}/history`).then(j<HistoryItem[]>),
+  historyDetail: (resultId: number) => fetch(`${BASE}/history/${resultId}`).then(j<HistoryDetail>),
 
   getTripCodes: () => fetch(`${BASE}/trip-codes`).then(j<TripCode[]>),
   putTripCodes: (items: TripCode[]) =>
