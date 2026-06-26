@@ -167,12 +167,13 @@ def history_detail(result_id: int) -> dict:
         raise HTTPException(status_code=404, detail="원본 파일이 더 이상 존재하지 않습니다.")
 
     df = column_mapper.map_columns(file_parser.parse_file(db_file.filename, file_path.read_bytes()))
-    series = result_builder.build_series(df, DEFAULT_CHART_COLUMNS)
+    trip = result.trip_info or {"count": 0, "ranges": []}
+    series = result_builder.build_series(df, DEFAULT_CHART_COLUMNS, trip=trip)
 
     anomalies = result.anomalies or {}
     return {
         "verdict": result.verdict,
-        "trip": result.trip_info or {"count": 0, "ranges": []},
+        "trip": trip,
         "baseline": anomalies.get("baseline", {"out_of_range": []}),
         "quality": anomalies.get("quality", {"missing": 0, "outliers": 0}),
         "series": series,
