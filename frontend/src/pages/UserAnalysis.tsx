@@ -8,7 +8,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { parseDataFile, LINE_COLORS } from "@/lib/parseFile";
+import { parseDataFile, LINE_COLORS, expandNarrowTripRanges } from "@/lib/parseFile";
 import { api } from "@/lib/api";
 import { useApp } from "@/context";
 import { cn } from "@/lib/utils";
@@ -37,6 +37,9 @@ export default function UserAnalysis() {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const verdict = result?.verdict ?? null;
+  const tripRanges = parsed
+    ? expandNarrowTripRanges(parsed.tripRanges, parsed.series[0]?.time ?? 0, parsed.series[parsed.series.length - 1]?.time ?? 0)
+    : [];
 
   const onPick = async (f: File | null) => {
     setErr(null);
@@ -143,7 +146,7 @@ export default function UserAnalysis() {
                   <YAxis tick={{ fontSize: 11 }} />
                   <Tooltip />
                   <Legend />
-                  {parsed.tripRanges.map(([a, b], i) => (
+                  {tripRanges.map(([a, b], i) => (
                     <ReferenceArea key={i} x1={a} x2={b} fill="#ef4444" fillOpacity={0.12} />
                   ))}
                   {cols.map((c, i) => (

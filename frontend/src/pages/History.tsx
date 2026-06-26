@@ -7,7 +7,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useApp } from "@/context";
 import { api, type HistoryDetail } from "@/lib/api";
-import { LINE_COLORS } from "@/lib/parseFile";
+import { LINE_COLORS, expandNarrowTripRanges } from "@/lib/parseFile";
 
 function VerdictBadge({ verdict }: { verdict: string }) {
   const v = verdict === "PASS" ? "success" : verdict === "FAIL" ? "destructive" : "warning";
@@ -45,6 +45,13 @@ export default function History() {
   }
 
   const seriesCols = detail ? Object.keys(detail.series[0] ?? {}).filter((c) => c !== "time") : [];
+  const tripRanges = detail
+    ? expandNarrowTripRanges(
+        detail.trip.ranges as [number, number][],
+        detail.series[0]?.time ?? 0,
+        detail.series[detail.series.length - 1]?.time ?? 0,
+      )
+    : [];
 
   return (
     <div className="max-w-3xl space-y-4">
@@ -77,7 +84,7 @@ export default function History() {
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
                 <Legend />
-                {detail.trip.ranges.map(([a, b], i) => (
+                {tripRanges.map(([a, b], i) => (
                   <ReferenceArea key={i} x1={a} x2={b} fill="#ef4444" fillOpacity={0.12} />
                 ))}
                 {seriesCols.map((c, i) => (
