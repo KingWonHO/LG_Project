@@ -76,6 +76,10 @@ export const api = {
   putRules: (rules: unknown) =>
     fetch(`${BASE}/rules`, { method: "PUT", headers: jsonHeaders, body: JSON.stringify(rules) }).then(j<{ ok: boolean }>),
 
+  // RAG-001: DB의 Trip Code를 ChromaDB에 재인덱싱 (엔지니어가 Trip Code 수정 후 호출)
+  ragIndex: () =>
+    fetch(`${BASE}/rag/index`, { method: "POST" }).then(j<{ indexed: number }>),
+
   report: (analysis: unknown) =>
     fetch(`${BASE}/report`, { method: "POST", headers: jsonHeaders, body: JSON.stringify(analysis) }).then(j<ReportData>),
 };
