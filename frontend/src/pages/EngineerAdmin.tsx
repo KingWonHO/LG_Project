@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useRole } from "@/context";
 import { api, type TripCode, type Baseline } from "@/lib/api";
-import { ShieldAlert, Plus, Loader2, Check } from "lucide-react";
+import { ShieldAlert, Plus, Loader2, Check, RefreshCw } from "lucide-react";
 
 function SaveState({ state }: { state: string }) {
   if (state === "saving") return <span className="text-xs text-muted-foreground inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> 저장 중</span>;
@@ -21,6 +21,7 @@ export default function EngineerAdmin() {
   const [promptVer, setPromptVer] = useState("");
   const [promptText, setPromptText] = useState("");
   const [s, setS] = useState({ trip: "", base: "", prompt: "" });
+  const [rag, setRag] = useState("");
 
   useEffect(() => {
     if (role !== "engineer") return;
@@ -48,6 +49,14 @@ export default function EngineerAdmin() {
     try { await api.putTripCodes(trips); setS((p) => ({ ...p, trip: "saved" })); setTrips(await api.getTripCodes()); }
     catch (e: any) { setS((p) => ({ ...p, trip: "저장 실패: " + e.message })); }
   };
+
+  // RAG-001: Trip Code DB 수정 내용을 ChromaDB(RAG 색인)에 반영
+  const reindexRag = async () => {
+    setRag("재인덱싱 중…");
+    try { const r = await api.ragIndex(); setRag(`재인덱싱 완료 (${r.indexed}건)`); }
+    catch (e: any) { setRag("재인덱싱 실패: " + e.message); }
+  };
+  const saveTripsAndReindex = async () => { await saveTrips(); await reindexRag(); };
 
   const setBase = (i: number, k: keyof Baseline, v: any) =>
     setBaselines((p) => p.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
@@ -110,10 +119,17 @@ export default function EngineerAdmin() {
                   </tbody>
                 </table>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                 <Button variant="outline" size="sm" onClick={addTrip}><Plus className="h-4 w-4" /> 행 추가</Button>
                 <Button size="sm" onClick={saveTrips}>저장 (DB 반영)</Button>
+                <Button variant="secondary" size="sm" onClick={saveTripsAndReindex}>
+                  <RefreshCw className="h-4 w-4" /> 저장 + RAG 재인덱싱
+                </Button>
+                {rag && <span className="text-xs text-muted-foreground">{rag}</span>}
               </div>
+              <p className="text-xs text-muted-foreground">
+                Trip Code를 수정한 뒤 "RAG 재인덱싱"을 실행하면 리포트의 RAG 참고자료에 최신 내용이 반영됩니다.
+              </p>
             </CardContent>
           </Card>
         </TabsContent>
