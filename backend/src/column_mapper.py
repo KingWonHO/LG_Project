@@ -14,12 +14,14 @@ STANDARD_COLUMN_ALIASES: dict[str, list[str]] = {
     "Trip_Code": ["trip_code", "tripcode", "trip code", "트립코드", "트립 코드"],
     "Time": ["time"],
     "컴프전류": ["컴프전류", "컴프 전류", "comp_current", "compcurrent"],
-    "전압": ["전압", "voltage", "volt"],
+    # 전압: 헤더 텍스트가 아니라 실측값 패턴(정지 시 310V 고정)으로 식별함.
+    # 정상데이터/관리필요데이터 계열은 헤더 그대로 "Ide"가, PCB변경 계열은 "Idef"가 이 패턴을 보임.
+    # 반면 헤더에 글자 그대로 적힌 "DC_Link"는 값 범위가 0~6이라 전압이 아닌 것으로 판단해 별도 유지.
+    "전압": ["전압", "voltage", "volt", "ide", "idef"],
     "RT": ["rt"],
-    # 전류/기준값 계열 (Ide/Iqe 계열) — 정상데이터/관리필요데이터/PCB변경 트립 샘플 기준
-    "Ide": ["ide", "ide(0.01)"],
+    # Ide(0.01)은 PCB변경 계열의 진짜 d축 전류(정지 시 0, 운전 시 증가) — "Ide"(전압)와 다른 신호.
+    "Ide": ["ide(0.01)"],
     "Iqe": ["iqe"],
-    "Idef": ["idef"],
     "Iqef": ["iqef"],
     "Ide_ref": ["ide_ref", "ide ref"],
     "Iqe_ref": ["iqe_ref", "iqeref", "iqe ref"],
