@@ -73,3 +73,24 @@ export async function parseDataFile(file: File): Promise<ParsedFile> {
 }
 
 export const LINE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"];
+
+/**
+ * 1행짜리 트립처럼 x1===x2이거나 폭이 전체 시간 범위의 1% 미만이면 ReferenceArea가 안 보이므로,
+ * 중심값 기준으로 전체 범위의 1.5%(1~2% 사이) 폭으로 확장한다.
+ */
+export function expandNarrowTripRanges(
+  ranges: [number, number][],
+  domainMin: number,
+  domainMax: number,
+): [number, number][] {
+  const span = domainMax - domainMin;
+  if (span <= 0) return ranges;
+  const minWidth = span * 0.01;
+  const expandedWidth = span * 0.015;
+  return ranges.map(([a, b]) => {
+    const width = b - a;
+    if (width >= minWidth) return [a, b];
+    const center = (a + b) / 2;
+    return [center - expandedWidth / 2, center + expandedWidth / 2];
+  });
+}

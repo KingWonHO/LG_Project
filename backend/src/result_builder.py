@@ -36,17 +36,36 @@ def _to_native(value):
     return value.item() if hasattr(value, "item") else value
 
 
-def build_series(df: pd.DataFrame, columns: list[str], max_points: int = 500) -> list[dict]:
+def _trip_boundary_indices(df: pd.DataFrame, trip: dict | None) -> set[int]:
+    """trip.ranges의 시작/종료 Time에 해당하는 행 인덱스를 찾는다.
+
+    균등 다운샘플링은 1행짜리 짧은 트립의 Time을 건너뛸 수 있어, 차트 라인이 트립 시점의
+    실제 신호 변화를 놓칠 수 있다. 이를 방지하기 위해 해당 행을 강제로 series에 포함시킨다.
+    """
+    if not trip or not trip.get("ranges"):
+        return set()
+    required_times = {t for start, end in trip["ranges"] for t in (start, end)}
+    time_to_index = {time: idx for idx, time in enumerate(df["Time"])}
+    return {time_to_index[t] for t in required_times if t in time_to_index}
+
+
+def build_series(
+    df: pd.DataFrame,
+    columns: list[str],
+    max_points: int = 500,
+    trip: dict | None = None,
+) -> list[dict]:
     """차트(USR-005/006)용 시계열 데이터를 생성한다.
 
     표준 컬럼명 Time을 표준 결과 형식의 "time" 키로 변환하고, USR-003에서 사용자가
     선택한 columns(예: 컴프전류, 전압)만 함께 담는다. 컴프레서 모델/PCB에 따라 컬럼 구성이
     달라 요청한 columns 중 DataFrame에 없는 항목은 baseline_analyzer와 동일하게 조용히
     건너뛴다 (실제로 포함된 컬럼은 각 series 레코드의 키로 그대로 드러난다).
+    trip을 넘기면 트립 시작/종료 Time 행은 다운샘플링으로 누락되지 않도록 강제로 포함한다.
     """
     columns = [column for column in columns if column in df.columns]
-    indices = _downsample_indices(len(df), max_points)
-    subset = df.iloc[indices][["Time", *columns]]
+    indices = set(_downsample_indices(len(df), max_points)) | _trip_boundary_indices(df, trip)
+    subset = df.iloc[sorted(indices)][["Time", *columns]]
     series = []
     for row in subset.itertuples(index=False):
         record = {"time": _to_native(row[0])}
@@ -80,5 +99,5 @@ def build_result(
         "trip": trip,
         "baseline": baseline,
         "quality": quality,
-        "series": build_series(df, columns, max_points),
+        "series": build_series(df, columns, max_points, trip=trip),
     }

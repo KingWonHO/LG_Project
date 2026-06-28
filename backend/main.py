@@ -148,6 +148,41 @@ def history() -> list[dict]:
     return db_manager.get_analysis_history()
 
 
+@app.get("/api/history/{result_id}")
+def history_detail(result_id: int) -> dict:
+    """ADM-002 상세 — 과거 분석의 verdict/trip/baseline/quality + 차트용 series를 반환한다.
+
+    series는 DB에 저장하지 않으므로, 업로드 당시 저장해둔 원본 파일(file_path)을 다시 읽어서
+    file_parser → column_mapper → result_builder로 그 자리에서 재계산한다 (src 모듈 수정 없음).
+    """
+    result = db_manager.get_analysis_result_by_id(result_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="분석 결과를 찾을 수 없습니다.")
+    db_file = db_manager.get_file_info(result.file_id)
+    if not db_file:
+        raise HTTPException(status_code=404, detail="원본 파일 정보를 찾을 수 없습니다.")
+
+    file_path = Path(db_file.file_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="원본 파일이 더 이상 존재하지 않습니다.")
+
+    df = column_mapper.map_columns(file_parser.parse_file(db_file.filename, file_path.read_bytes()))
+    trip = result.trip_info or {"count": 0, "ranges": []}
+    series = result_builder.build_series(df, DEFAULT_CHART_COLUMNS, trip=trip)
+
+    anomalies = result.anomalies or {}
+    return {
+        "verdict": result.verdict,
+        "trip": trip,
+        "baseline": anomalies.get("baseline", {"out_of_range": []}),
+        "quality": anomalies.get("quality", {"missing": 0, "outliers": 0}),
+        "series": series,
+        "filename": db_file.filename,
+        "file_id": db_file.id,
+        "result_id": result.id,
+    }
+
+
 # ---------------------------------------------------------------------------
 # 엔지니어 관리 (ENG / DB)
 # ---------------------------------------------------------------------------
