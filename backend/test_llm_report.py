@@ -1,4 +1,4 @@
-from src.llm_report import generate_llm_summary
+from src.llm_report import build_summary_prompt, generate_llm_summary
 
 
 sample_analysis_json = {
@@ -23,8 +23,8 @@ sample_analysis_json = {
 }
 
 sample_rag_results = [
-    "Vdc 저하는 전원 공급 불안정 또는 인버터 입력 전압 문제와 관련될 수 있다.",
-    "Temperature 상승은 냉각 조건 불량, 과부하 운전, 센서 이상 가능성과 관련된다.",
+    "Vdc 저하는 전원 공급 불안정 또는 인버터 입력 전압 문제와 관련될 수 있다. 조치 방법은 전원부와 인버터 입력 전압을 우선 점검하는 것이다.",
+    "Temperature 상승은 냉각 조건 불량, 과부하 운전, 센서 이상 가능성과 관련된다. 조치 방법은 냉각 조건과 과부하 운전 여부를 확인하는 것이다.",
 ]
 
 
@@ -36,6 +36,9 @@ candidate_models = [
 
 
 if __name__ == "__main__":
+    print("[프롬프트 확인]")
+    print(build_summary_prompt(sample_analysis_json, sample_rag_results))
+    print()
     for model in candidate_models:
         print("=" * 80)
         print(f"[모델 테스트] {model}")
