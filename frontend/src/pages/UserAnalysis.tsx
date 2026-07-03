@@ -3,12 +3,13 @@ import { useNavigate } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea, Legend,
 } from "recharts";
-import { Upload, Play, FileText, AlertTriangle, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { Upload, Play, FileText, AlertTriangle, CheckCircle2, XCircle, Loader2, Plus, Trash2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { parseDataFile, LINE_COLORS, expandNarrowTripRanges } from "@/lib/parseFile";
+import { parseDataFile, LINE_COLORS, expandNarrowTripRanges, type ParsedFile } from "@/lib/parseFile";
+import { canonicalName, isPlottable, type PressureMode } from "@/lib/columnSchema";
 import { api } from "@/lib/api";
 import { useApp } from "@/context";
 import { cn } from "@/lib/utils";
@@ -24,11 +25,16 @@ function VerdictBadge({ verdict }: { verdict: string | null }) {
   return <Badge variant="secondary" className="text-sm px-3 py-1">분석 전</Badge>;
 }
 
-const PREFERRED = ["Iqe", "CoolingPower", "Power", "DC_Link", "Ide", "Initial_Delay"];
+// 기본 선택 컬럼: Imag(1)·DC_link(3)·Power(7) 우선, 없으면 앞에서 3개
+function defaultCols(p: ParsedFile, mode: PressureMode): number[] {
+  const plot = p.numericIndices.filter((i) => isPlottable(i, mode));
+  const pref = [1, 3, 7].filter((i) => plot.includes(i));
+  return pref.length ? pref : plot.slice(0, 3);
+}
 
 export default function UserAnalysis() {
   const { ua, setUa, refreshHistory, setLastResult } = useApp();
-  const { file, parsed, cols, result } = ua;
+  const { file, parsed, mode, graphs, result } = ua;
   const navigate = useNavigate();
 
   const [parsing, setParsing] = useState(false);
@@ -40,16 +46,16 @@ export default function UserAnalysis() {
   const tripRanges = parsed
     ? expandNarrowTripRanges(parsed.tripRanges, parsed.series[0]?.time ?? 0, parsed.series[parsed.series.length - 1]?.time ?? 0)
     : [];
+  const selectable = parsed ? parsed.numericIndices.filter((i) => isPlottable(i, mode)) : [];
 
   const onPick = async (f: File | null) => {
     setErr(null);
-    setUa({ file: f, parsed: null, result: null, cols: [] });
+    setUa({ file: f, parsed: null, result: null, graphs: [[]] });
     if (!f) return;
     setParsing(true);
     try {
       const p = await parseDataFile(f);
-      const def = PREFERRED.filter((c) => p.numericColumns.includes(c));
-      setUa({ parsed: p, cols: def.length ? def.slice(0, 3) : p.numericColumns.slice(0, 3) });
+      setUa({ parsed: p, graphs: [defaultCols(p, mode)] });
     } catch (e: any) {
       setErr("파일 파싱 실패: " + e.message);
     } finally {
@@ -57,8 +63,16 @@ export default function UserAnalysis() {
     }
   };
 
-  const toggleCol = (c: string) =>
-    setUa({ cols: cols.includes(c) ? cols.filter((x) => x !== c) : [...cols, c] });
+  const setMode = (m: PressureMode) => setUa({ mode: m });
+
+  const toggleCol = (gi: number, idx: number) =>
+    setUa({
+      graphs: graphs.map((g, i) =>
+        i === gi ? (g.includes(idx) ? g.filter((x) => x !== idx) : [...g, idx]) : g
+      ),
+    });
+  const addGraph = () => setUa({ graphs: [...graphs, parsed ? defaultCols(parsed, mode) : []] });
+  const removeGraph = (gi: number) => setUa({ graphs: graphs.filter((_, i) => i !== gi) });
 
   const run = async () => {
     if (!file) { setErr("CSV/XLSX 파일을 먼저 선택하세요."); return; }
@@ -83,7 +97,7 @@ export default function UserAnalysis() {
           <TabsTrigger value="learning">학습</TabsTrigger>
         </TabsList>
         <div className="flex items-center gap-3">
-          <Tabs defaultValue="평압">
+          <Tabs value={mode} onValueChange={(v) => setMode(v as PressureMode)}>
             <TabsList>
               <TabsTrigger value="평압">평압</TabsTrigger>
               <TabsTrigger value="차압">차압</TabsTrigger>
@@ -94,6 +108,7 @@ export default function UserAnalysis() {
       </div>
 
       <TabsContent value="analysis" className="space-y-3 mt-3">
+        {/* 업로드 / 실행 */}
         <Card>
           <CardContent className="pt-4 space-y-3">
             <div className="flex items-center gap-2">
@@ -112,52 +127,14 @@ export default function UserAnalysis() {
             {parsing && <p className="text-xs text-muted-foreground inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> 파일 파싱 중…</p>}
             {parsed && (
               <p className="text-xs text-muted-foreground">
-                행 {parsed.rowCount.toLocaleString()} · 컬럼 {parsed.columns.length} · Trip 구간 {parsed.tripCount}개
+                행 {parsed.rowCount.toLocaleString()} · 컬럼 {parsed.columnCount} · Trip 구간 {parsed.tripCount}개 · 컬럼명 기준: <b>{mode}</b>(={mode === "차압" ? "DPS" : "NODPS"})
               </p>
-            )}
-
-            {parsed && (
-              <div className="flex flex-wrap gap-1.5">
-                {parsed.numericColumns.map((c) => (
-                  <button key={c} onClick={() => toggleCol(c)}
-                    className={cn("rounded-md border px-2.5 py-1 text-xs transition-colors",
-                      cols.includes(c) ? "bg-primary text-primary-foreground border-transparent" : "hover:bg-secondary/60")}>
-                    {c}
-                  </button>
-                ))}
-              </div>
             )}
             {err && <p className="text-xs text-destructive">{err}</p>}
           </CardContent>
         </Card>
 
-        <Card className="flex flex-col h-[340px]">
-          <CardHeader><CardTitle>그래프 {parsed && <span className="text-xs text-muted-foreground">· 실제 데이터 ({cols.length}개 컬럼)</span>}</CardTitle></CardHeader>
-          <CardContent className="flex-1 min-h-0">
-            {!parsed ? (
-              <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-                파일을 선택하면 실제 시계열 그래프가 표시됩니다.
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={parsed.series} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                  <XAxis dataKey="time" type="number" domain={["dataMin", "dataMax"]} tick={{ fontSize: 11 }} />
-                  <YAxis tick={{ fontSize: 11 }} />
-                  <Tooltip />
-                  <Legend />
-                  {tripRanges.map(([a, b], i) => (
-                    <ReferenceArea key={i} x1={a} x2={b} fill="#ef4444" fillOpacity={0.12} />
-                  ))}
-                  {cols.map((c, i) => (
-                    <Line key={c} type="monotone" dataKey={c} stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={false} strokeWidth={1.5} />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
-
+        {/* 분석 결과 (위) */}
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">분석 결과</CardTitle>
@@ -192,6 +169,65 @@ export default function UserAnalysis() {
             )}
           </CardContent>
         </Card>
+
+        {/* 그래프 (아래, 여러 개) */}
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-medium">그래프</h3>
+          <Button variant="outline" size="sm" onClick={addGraph} disabled={!parsed}>
+            <Plus className="h-4 w-4" /> 그래프 추가
+          </Button>
+        </div>
+
+        {!parsed ? (
+          <Card><CardContent className="pt-6 text-sm text-muted-foreground text-center">
+            파일을 선택하면 실제 시계열 그래프가 표시됩니다.
+          </CardContent></Card>
+        ) : (
+          graphs.map((g, gi) => {
+            const drawn = g.filter((i) => isPlottable(i, mode) && parsed.numericIndices.includes(i));
+            return (
+              <Card key={gi}>
+                <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-base">그래프 {gi + 1} <span className="text-xs text-muted-foreground">· {drawn.length}개 컬럼</span></CardTitle>
+                  {graphs.length > 1 && (
+                    <Button variant="ghost" size="sm" onClick={() => removeGraph(gi)} className="text-muted-foreground hover:text-destructive">
+                      <Trash2 className="h-4 w-4" /> 삭제
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectable.map((idx) => (
+                      <button key={idx} onClick={() => toggleCol(gi, idx)}
+                        className={cn("rounded-md border px-2.5 py-1 text-xs transition-colors",
+                          g.includes(idx) ? "bg-primary text-primary-foreground border-transparent" : "hover:bg-secondary/60")}>
+                        {canonicalName(idx, mode)}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={parsed.series} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                        <XAxis dataKey="time" type="number" domain={["dataMin", "dataMax"]} tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} />
+                        <Tooltip />
+                        <Legend />
+                        {tripRanges.map(([a, b], i) => (
+                          <ReferenceArea key={i} x1={a} x2={b} fill="#ef4444" fillOpacity={0.12} />
+                        ))}
+                        {drawn.map((idx, i) => (
+                          <Line key={idx} type="monotone" dataKey={String(idx)} name={canonicalName(idx, mode) ?? String(idx)}
+                                stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={false} strokeWidth={1.5} />
+                        ))}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })
+        )}
 
         <div className="flex gap-2">
           <Button className="flex-1" disabled={!result} onClick={() => navigate("/report")}>

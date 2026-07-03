@@ -1,10 +1,12 @@
 import * as XLSX from "xlsx";
+import { TIME_INDEX, TRIP_INDEX } from "./columnSchema";
 
 export type ParsedFile = {
-  columns: string[];
-  numericColumns: string[];
+  columnCount: number;
+  numericIndices: number[];        // 그릴 수 있는 숫자형 컬럼 인덱스 (1..19, Time/Trip 제외)
+  rawNames: string[];              // 엑셀 원본 헤더명 (인덱스 기준, 참고용)
   rowCount: number;
-  series: Record<string, number>[];
+  series: Record<string, number>[]; // { time, "1": v, "3": v, ... } 인덱스 문자열 키
   tripRanges: [number, number][];
   tripCount: number;
 };
@@ -15,38 +17,41 @@ export async function parseDataFile(file: File): Promise<ParsedFile> {
   const ws = wb.Sheets[wb.SheetNames[0]];
   const aoa = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, blankrows: false });
 
+  // 헤더 행: 'time' 셀이 있는 행 (없으면 0행). 인덱스만 있는 행은 그 다음이 헤더가 됨.
   let hi = aoa.findIndex(
     (r) => Array.isArray(r) && r.some((c) => typeof c === "string" && c.trim().toLowerCase() === "time")
   );
   if (hi < 0) hi = 0;
 
-  const columns = (aoa[hi] as any[])
-    .map((c) => (c == null ? "" : String(c).trim()))
-    .filter((c) => c !== "");
+  const header = (aoa[hi] as any[]) ?? [];
+  const rawNames = header.map((c) => (c == null ? "" : String(c).trim()));
+  const columnCount = rawNames.length;
 
-  const rows: Record<string, any>[] = [];
+  // 데이터 행 (위치 기준 — 빈 셀 필터로 인덱스가 밀리지 않도록 raw 배열을 그대로 사용)
+  const dataRows: any[][] = [];
   for (let i = hi + 1; i < aoa.length; i++) {
     const r = aoa[i];
     if (!Array.isArray(r)) continue;
-    const o: Record<string, any> = {};
-    columns.forEach((c, idx) => (o[c] = r[idx]));
-    if (o["time"] == null || o["time"] === "") continue;
-    rows.push(o);
+    if (r[TIME_INDEX] == null || r[TIME_INDEX] === "") continue;
+    dataRows.push(r);
   }
 
-  const numericColumns = columns.filter(
-    (c) =>
-      c !== "time" &&
-      c !== "Trip_Code" &&
-      rows.slice(0, 100).some((o) => typeof o[c] === "number" && Number.isFinite(o[c]))
-  );
+  // 숫자형 컬럼 인덱스 판정 (1..19, Trip 제외) — 표본 100행 기준
+  const maxIdx = Math.min(19, columnCount - 1);
+  const sample = dataRows.slice(0, 100);
+  const numericIndices: number[] = [];
+  for (let idx = 1; idx <= maxIdx; idx++) {
+    if (idx === TRIP_INDEX) continue;
+    if (sample.some((r) => typeof r[idx] === "number" && Number.isFinite(r[idx]))) numericIndices.push(idx);
+  }
 
+  // Trip 구간 (인덱스 20 != 0 연속 구간)
   const tripRanges: [number, number][] = [];
   let start: number | null = null;
   let prevT = 0;
-  for (const o of rows) {
-    const t = Number(o["time"]);
-    const code = Number(o["Trip_Code"]) || 0;
+  for (const r of dataRows) {
+    const t = Number(r[TIME_INDEX]);
+    const code = Number(r[TRIP_INDEX]) || 0;
     if (code !== 0) {
       if (start == null) start = t;
     } else if (start != null) {
@@ -57,19 +62,20 @@ export async function parseDataFile(file: File): Promise<ParsedFile> {
   }
   if (start != null) tripRanges.push([start, prevT]);
 
-  const step = Math.max(1, Math.ceil(rows.length / 2000));
-  const series = rows
+  // 다운샘플 + series (키: "time" + 인덱스 문자열)
+  const step = Math.max(1, Math.ceil(dataRows.length / 2000));
+  const series = dataRows
     .filter((_, i) => i % step === 0)
-    .map((o) => {
-      const s: Record<string, number> = { time: Number(o["time"]) };
-      for (const c of numericColumns) {
-        const v = Number(o[c]);
-        s[c] = Number.isFinite(v) ? v : 0;
+    .map((r) => {
+      const s: Record<string, number> = { time: Number(r[TIME_INDEX]) };
+      for (const idx of numericIndices) {
+        const v = Number(r[idx]);
+        s[String(idx)] = Number.isFinite(v) ? v : 0;
       }
       return s;
     });
 
-  return { columns, numericColumns, rowCount: rows.length, series, tripRanges, tripCount: tripRanges.length };
+  return { columnCount, numericIndices, rawNames, rowCount: dataRows.length, series, tripRanges, tripCount: tripRanges.length };
 }
 
 export const LINE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"];
