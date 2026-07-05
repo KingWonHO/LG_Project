@@ -13,6 +13,14 @@ export type AnalyzeResponse = {
   filename: string;
   file_id: number;
   result_id: number;
+  comp_model?: string | null;
+};
+
+export type ParamDef = { display_name_ko?: string; unit?: string; category?: string; description?: string };
+export type CompressorsData = {
+  models: string[];
+  definitions: Record<string, ParamDef>;
+  compressors: Record<string, { parameters: Record<string, number | null>; metadata?: Record<string, unknown> }>;
 };
 
 export type HistoryItem = {
@@ -52,14 +60,19 @@ const jsonHeaders = { "Content-Type": "application/json" };
 export const api = {
   health: () => fetch(`${BASE}/health`).then(j<{ status: string; llm_model: string }>),
 
-  analyze: (file: File) => {
+  analyze: (file: File, compModel?: string) => {
     const fd = new FormData();
     fd.append("file", file);
+    if (compModel) fd.append("comp_model", compModel);
     return fetch(`${BASE}/analyze`, { method: "POST", body: fd }).then(j<AnalyzeResponse>);
   },
 
+  getCompressors: () => fetch(`${BASE}/compressors`).then(j<CompressorsData>),
+
   history: () => fetch(`${BASE}/history`).then(j<HistoryItem[]>),
   historyDetail: (resultId: number) => fetch(`${BASE}/history/${resultId}`).then(j<HistoryDetail>),
+  deleteHistory: (resultId: number) =>
+    fetch(`${BASE}/history/${resultId}`, { method: "DELETE" }).then(j<{ deleted: number }>),
 
   getTripCodes: () => fetch(`${BASE}/trip-codes`).then(j<TripCode[]>),
   putTripCodes: (items: TripCode[]) =>

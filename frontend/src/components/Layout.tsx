@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { BarChart3, FileText, LogOut, ServerCrash } from "lucide-react";
+import { BarChart3, FileText, LogOut, ServerCrash, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useRole, useApp, MOCK_ACCESS_CODE } from "@/context";
+import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const navBase = "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors";
@@ -15,10 +16,18 @@ function verdictColor(v: string) {
 
 export default function Layout() {
   const { role, setRole } = useRole();
-  const { history, selected, setSelected, backendUp } = useApp();
+  const { history, selected, setSelected, backendUp, refreshHistory } = useApp();
   const navigate = useNavigate();
   const [code, setCode] = useState("");
   const [err, setErr] = useState(false);
+
+  const onDelete = async (resultId: number) => {
+    try {
+      await api.deleteHistory(resultId);
+      if (selected?.result_id === resultId) setSelected(null);
+      await refreshHistory();
+    } catch { /* 무시 */ }
+  };
 
   const link = ({ isActive }: { isActive: boolean }) =>
     cn(navBase, isActive ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-secondary/60");
@@ -43,16 +52,24 @@ export default function Layout() {
               <p className="px-1 text-xs text-muted-foreground">분석 기록이 없습니다.</p>
             ) : (
               history.map((h, i) => (
-                <button key={i} onClick={() => { setSelected(h); navigate("/history"); }}
-                  className={cn("w-full text-left rounded-md px-3 py-2 transition-colors",
+                <div key={i}
+                  className={cn("group flex items-start rounded-md transition-colors",
                     selected === h ? "bg-secondary" : "hover:bg-secondary/60")}>
-                  <p className="text-xs font-medium truncate">{h.파일명}</p>
-                  <p className="text-[11px] text-muted-foreground truncate">
-                    <span className={verdictColor(h.판정)}>{h.판정}</span>
-                    {h.행수 != null ? ` · ${h.행수.toLocaleString()}행` : ""}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground/70">{h.일시}</p>
-                </button>
+                  <button onClick={() => { setSelected(h); navigate("/history"); }}
+                    className="flex-1 min-w-0 text-left px-3 py-2">
+                    <p className="text-xs font-medium truncate">{h.파일명}</p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      <span className={verdictColor(h.판정)}>{h.판정}</span>
+                      {h.행수 != null ? ` · ${h.행수.toLocaleString()}행` : ""}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground/70">{h.일시}</p>
+                  </button>
+                  <button onClick={(e) => { e.stopPropagation(); onDelete(h.result_id); }}
+                    title="이력 삭제"
+                    className="shrink-0 px-1.5 py-2 text-muted-foreground/50 hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               ))
             )}
           </div>
