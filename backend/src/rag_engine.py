@@ -22,6 +22,11 @@ _embedder: SentenceTransformer | None = None
 _chroma_client: chromadb.ClientAPI | None = None
 
 COLLECTION_TRIP = "trip_codes"
+COLLECTION_ENGINEER = "engineer_rag"
+
+# 엔지니어 등록 룰이 이 거리(distance) 이내로 유사하면 기존 trip_codes 대신 엔지니어 룰을 우선 사용.
+# 임베딩 정규화(cosine 계열) 기준의 경험값 — 실제 데이터로 조정 가능.
+ENGINEER_MATCH_THRESHOLD = 1.0
 
 
 def _get_embedder() -> SentenceTransformer:
@@ -152,30 +157,87 @@ def search_trip_codes(query: str, n_results: int = 5) -> list[dict]:
     ]
 
 
-def build_rag_context(analysis_result: dict, n_results: int = 5) -> str:
-    """분석 결과 dict → 검색 쿼리 구성 → LLM 주입용 컨텍스트 문자열 반환 (RAG-002).
+def _build_signature(analysis_result: dict) -> str:
+    """분석 결과 → 유사도 비교용 시그니처 텍스트.
 
-    Args:
-        analysis_result: /api/analyze 응답 형식
-            {verdict, trip: {count, ranges}, baseline: {out_of_range}, quality: {...}}
-        n_results: 검색할 유사 문서 수
-    Returns:
-        LLM 프롬프트에 삽입할 참고 자료 문자열 (없으면 빈 문자열)
+    검색 쿼리와 엔지니어 룰 인덱싱 임베딩이 **같은 형식**이어야 매칭되므로 공용 함수로 둔다.
     """
     parts = [f"판정: {analysis_result.get('verdict', '')}"]
-
     trip = analysis_result.get("trip") or {}
     if trip.get("count", 0) > 0:
         parts.append(f"Trip 발생 횟수: {trip['count']}회")
-
     out_of_range = (analysis_result.get("baseline") or {}).get("out_of_range", [])
     if out_of_range:
         parts.append(f"Baseline 이탈 항목: {', '.join(out_of_range)}")
+    return " ".join(parts)
 
-    hits = search_trip_codes(" ".join(parts), n_results=n_results)
+
+def index_engineer_rule(rule_name: str, interpretation: str, signature_text: str,
+                        extra_meta: dict | None = None) -> str:
+    """엔지니어가 등록한 룰(해석)을 CSV 분석 시그니처 임베딩으로 engineer_rag 컬렉션에 저장 (RAG-001 확장).
+
+    embedding = 시그니처(판정/트립/이탈) → 이후 유사 분석이 오면 매칭.
+    document  = 엔지니어 해석 텍스트 → 매칭 시 LLM 컨텍스트로 반환.
+    """
+    import uuid
+
+    collection = _get_collection(COLLECTION_ENGINEER)
+    emb = _get_embedder().encode([signature_text], normalize_embeddings=True).tolist()
+    rid = f"eng-{uuid.uuid4().hex[:12]}"
+    meta: dict = {"rule_name": rule_name, "signature": signature_text}
+    if extra_meta:
+        meta.update({k: v for k, v in extra_meta.items() if isinstance(v, (str, int, float, bool))})
+    collection.upsert(ids=[rid], documents=[interpretation], metadatas=[meta], embeddings=emb)
+    return rid
+
+
+def search_engineer_rules(query: str, n_results: int = 3) -> list[dict]:
+    """engineer_rag 컬렉션에서 시그니처 유사 룰 검색."""
+    collection = _get_collection(COLLECTION_ENGINEER)
+    if collection.count() == 0:
+        return []
+    emb = _get_embedder().encode([query], normalize_embeddings=True).tolist()
+    res = collection.query(
+        query_embeddings=emb,
+        n_results=min(n_results, collection.count()),
+        include=["documents", "metadatas", "distances"],
+    )
+    return [
+        {"document": d, "metadata": m or {}, "distance": round(dist, 4)}
+        for d, m, dist in zip(res["documents"][0], res["metadatas"][0], res["distances"][0])
+    ]
+
+
+def engineer_rules_count() -> int:
+    """engineer_rag 컬렉션에 등록된 룰 수."""
+    try:
+        return _get_collection(COLLECTION_ENGINEER).count()
+    except Exception:
+        return 0
+
+
+def build_rag_context(analysis_result: dict, n_results: int = 5) -> str:
+    """분석 결과 → 이중 검색 후 LLM 주입용 컨텍스트 문자열 반환 (RAG-002).
+
+    1) 엔지니어 등록 룰(engineer_rag)에서 유사 사례 검색 → 임계값(ENGINEER_MATCH_THRESHOLD)
+       이내로 유사하면 그 룰을 우선 사용.
+    2) 유사한 엔지니어 룰이 없으면 기존 Trip Code 지식(trip_codes)을 사용.
+    """
+    query = _build_signature(analysis_result)
+
+    # 1) 엔지니어 룰 우선 (유사할 때만)
+    eng_hits = [h for h in search_engineer_rules(query, n_results=3) if h["distance"] <= ENGINEER_MATCH_THRESHOLD]
+    if eng_hits:
+        lines = ["[엔지니어 등록 유사 사례/룰]"]
+        for h in eng_hits:
+            name = (h["metadata"] or {}).get("rule_name", "")
+            lines.append(f"- {name}: {h['document'][:300]}")
+        return "\n".join(lines)
+
+    # 2) 기존 Trip Code 지식 (fallback)
+    hits = search_trip_codes(query, n_results=n_results)
     if not hits:
         return ""
-
     lines = ["[유사 Trip Code 참고 자료]"]
     for h in hits:
         lines.append(f"- {h['trip_key']} ({h['trip_name_ko']}): {h['document'][:200]}")

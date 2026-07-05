@@ -535,3 +535,48 @@ def rag_index() -> dict:
     """DB의 Trip Code를 ChromaDB에 재인덱싱 (RAG-001 수동 트리거)."""
     count = rag_engine.index_trip_codes_from_db()
     return {"indexed": count}
+
+
+@app.post("/api/rag/engineer")
+async def add_engineer_rule(
+    rule_name: str = Form(...),
+    interpretation: str = Form(...),
+    file: UploadFile = File(...),
+    comp_model: str | None = Form(None),
+) -> dict:
+    """엔지니어 RAG 룰 추가: 룰(해석) + 대표 CSV → CSV 분석 시그니처 임베딩으로 engineer_rag 저장.
+
+    이후 유사한 분석이 들어오면(build_rag_context 이중검색) 이 엔지니어 룰이 기존 Trip Code보다 우선 사용된다.
+    """
+    content = await file.read()
+    try:
+        df = column_mapper.map_columns(file_parser.parse_file(file.filename, content))
+    except file_parser.FileParseError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    trip = trip_analyzer.analyze_trip(df) if "Trip_Code" in df.columns else {"count": 0, "ranges": []}
+    baseline = baseline_analyzer.analyze_baseline(df, _load_baseline_ranges())
+    quality = {"missing": 0, "outliers": len(_detect_param_anomalies(df, _load_comp_parameters(comp_model)))}
+    verdict = verdict_engine.analyze_verdict(trip, baseline, quality)
+
+    signature = rag_engine._build_signature({"verdict": verdict["verdict"], "trip": trip, "baseline": baseline})
+    rid = rag_engine.index_engineer_rule(
+        rule_name=rule_name,
+        interpretation=interpretation,
+        signature_text=signature,
+        extra_meta={"filename": file.filename, "verdict": verdict["verdict"], "comp_model": comp_model or ""},
+    )
+    return {
+        "ok": True,
+        "id": rid,
+        "rule_name": rule_name,
+        "signature": signature,
+        "verdict": verdict["verdict"],
+        "count": rag_engine.engineer_rules_count(),
+    }
+
+
+@app.get("/api/rag/engineer")
+def engineer_rules_status() -> dict:
+    """등록된 엔지니어 RAG 룰 수."""
+    return {"count": rag_engine.engineer_rules_count()}
