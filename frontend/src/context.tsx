@@ -9,6 +9,7 @@ export type UAState = {
   file: File | null;
   parsed: ParsedFile | null;
   mode: PressureMode;       // 평압(NODPS) / 차압(DPS)
+  compModel: string;        // 선택한 컴프 모델 (Comp_Parameter.json)
   graphs: number[][];       // 그래프별 선택 컬럼 인덱스 목록
   result: AnalyzeResponse | null;
 };
@@ -29,7 +30,7 @@ type Ctx = {
   setReportData: (r: ReportData | null) => void;
 };
 
-const EMPTY_UA: UAState = { file: null, parsed: null, mode: "평압", graphs: [[]], result: null };
+const EMPTY_UA: UAState = { file: null, parsed: null, mode: "평압", compModel: "", graphs: [[]], result: null };
 
 const AppContext = createContext<Ctx>({
   role: "user",

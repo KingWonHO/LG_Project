@@ -9,6 +9,7 @@ export type ParsedFile = {
   series: Record<string, number>[]; // { time, "1": v, "3": v, ... } 인덱스 문자열 키
   tripRanges: [number, number][];
   tripCount: number;
+  tripCodes: number[];             // 실제 발생한 Trip_Code(idx20) 고유값 (0 제외)
 };
 
 export async function parseDataFile(file: File): Promise<ParsedFile> {
@@ -47,12 +48,14 @@ export async function parseDataFile(file: File): Promise<ParsedFile> {
 
   // Trip 구간 (인덱스 20 != 0 연속 구간)
   const tripRanges: [number, number][] = [];
+  const codeSet = new Set<number>();
   let start: number | null = null;
   let prevT = 0;
   for (const r of dataRows) {
     const t = Number(r[TIME_INDEX]);
     const code = Number(r[TRIP_INDEX]) || 0;
     if (code !== 0) {
+      codeSet.add(code);
       if (start == null) start = t;
     } else if (start != null) {
       tripRanges.push([start, prevT]);
@@ -61,6 +64,7 @@ export async function parseDataFile(file: File): Promise<ParsedFile> {
     prevT = t;
   }
   if (start != null) tripRanges.push([start, prevT]);
+  const tripCodes = [...codeSet].sort((a, b) => a - b);
 
   // 다운샘플 + series (키: "time" + 인덱스 문자열)
   const step = Math.max(1, Math.ceil(dataRows.length / 2000));
@@ -75,7 +79,7 @@ export async function parseDataFile(file: File): Promise<ParsedFile> {
       return s;
     });
 
-  return { columnCount, numericIndices, rawNames, rowCount: dataRows.length, series, tripRanges, tripCount: tripRanges.length };
+  return { columnCount, numericIndices, rawNames, rowCount: dataRows.length, series, tripRanges, tripCount: tripRanges.length, tripCodes };
 }
 
 export const LINE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"];

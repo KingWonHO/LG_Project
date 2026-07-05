@@ -1,16 +1,18 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea, Legend,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea, Legend, Brush,
 } from "recharts";
 import { Upload, Play, FileText, AlertTriangle, CheckCircle2, XCircle, Loader2, Plus, Trash2 } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { parseDataFile, LINE_COLORS, expandNarrowTripRanges, type ParsedFile } from "@/lib/parseFile";
 import { canonicalName, isPlottable, type PressureMode } from "@/lib/columnSchema";
-import { api } from "@/lib/api";
+import { api, type CompressorsData } from "@/lib/api";
 import { useApp } from "@/context";
 import { cn } from "@/lib/utils";
 
@@ -25,22 +27,136 @@ function VerdictBadge({ verdict }: { verdict: string | null }) {
   return <Badge variant="secondary" className="text-sm px-3 py-1">분석 전</Badge>;
 }
 
-// 기본 선택 컬럼: Imag(1)·DC_link(3)·Power(7) 우선, 없으면 앞에서 3개
 function defaultCols(p: ParsedFile, mode: PressureMode): number[] {
   const plot = p.numericIndices.filter((i) => isPlottable(i, mode));
   const pref = [1, 3, 7].filter((i) => plot.includes(i));
   return pref.length ? pref : plot.slice(0, 3);
 }
 
+type GraphCardProps = {
+  parsed: ParsedFile;
+  mode: PressureMode;
+  tripRanges: [number, number][];
+  cols: number[];
+  selectable: number[];
+  index: number;
+  canRemove: boolean;
+  onToggle: (idx: number) => void;
+  onRemove: () => void;
+};
+
+function GraphCard({ parsed, mode, tripRanges, cols, selectable, index, canRemove, onToggle, onRemove }: GraphCardProps) {
+  const drawn = cols.filter((i) => isPlottable(i, mode) && parsed.numericIndices.includes(i));
+  const len = parsed.series.length;
+
+  const [range, setRange] = useState<[number, number]>([0, Math.max(0, len - 1)]);
+  useEffect(() => { setRange([0, Math.max(0, len - 1)]); }, [len]);
+
+  const timeAt = (i: number) => parsed.series[Math.min(Math.max(i, 0), len - 1)]?.time ?? 0;
+  const startTime = timeAt(range[0]);
+  const endTime = timeAt(range[1]);
+
+  const [inS, setInS] = useState("");
+  const [inE, setInE] = useState("");
+  useEffect(() => { setInS(String(Math.round(startTime))); setInE(String(Math.round(endTime))); }, [startTime, endTime]);
+
+  const applyTime = () => {
+    const s = Number(inS), e = Number(inE);
+    if (!Number.isFinite(s) || !Number.isFinite(e) || s >= e) return;
+    let si = parsed.series.findIndex((p) => p.time >= s);
+    if (si < 0) si = 0;
+    let ei = len - 1;
+    for (let i = len - 1; i >= 0; i--) { if (parsed.series[i].time <= e) { ei = i; break; } }
+    if (ei <= si) ei = Math.min(len - 1, si + 1);
+    setRange([si, ei]);
+  };
+  const resetRange = () => setRange([0, Math.max(0, len - 1)]);
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-base">그래프 {index + 1} <span className="text-xs text-muted-foreground">· {drawn.length}개 컬럼</span></CardTitle>
+        {canRemove && (
+          <Button variant="ghost" size="sm" onClick={onRemove} className="text-muted-foreground hover:text-destructive">
+            <Trash2 className="h-4 w-4" /> 삭제
+          </Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="flex flex-wrap gap-1.5">
+          {selectable.map((idx) => (
+            <button key={idx} onClick={() => onToggle(idx)}
+              className={cn("rounded-md border px-2.5 py-1 text-xs transition-colors",
+                cols.includes(idx) ? "bg-primary text-primary-foreground border-transparent" : "hover:bg-secondary/60")}>
+              {canonicalName(idx, mode)}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-muted-foreground shrink-0">시간 구간</span>
+          <Input type="number" value={inS} onChange={(e) => setInS(e.target.value)}
+                 onKeyDown={(e) => e.key === "Enter" && applyTime()} className="h-7 w-28" />
+          <span className="text-muted-foreground">~</span>
+          <Input type="number" value={inE} onChange={(e) => setInE(e.target.value)}
+                 onKeyDown={(e) => e.key === "Enter" && applyTime()} className="h-7 w-28" />
+          <Button size="sm" variant="outline" className="h-7" onClick={applyTime}>적용</Button>
+          <Button size="sm" variant="ghost" className="h-7" onClick={resetRange}>리셋</Button>
+        </div>
+
+        <div className="h-[300px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={parsed.series} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+              <XAxis dataKey="time" type="number" domain={["dataMin", "dataMax"]} tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} />
+              <Tooltip />
+              <Legend />
+              {tripRanges.map(([a, b], i) => (
+                <ReferenceArea key={i} x1={a} x2={b} fill="#ef4444" fillOpacity={0.12} />
+              ))}
+              {drawn.map((idx, i) => (
+                <Line key={idx} type="monotone" dataKey={String(idx)} name={canonicalName(idx, mode) ?? String(idx)}
+                      stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={false} strokeWidth={1.5} isAnimationActive={false} />
+              ))}
+              <Brush dataKey="time" height={18} stroke="#94a3b8" travellerWidth={8}
+                     startIndex={range[0]} endIndex={range[1]}
+                     onChange={(r: any) => {
+                       if (r && typeof r.startIndex === "number" && typeof r.endIndex === "number") setRange([r.startIndex, r.endIndex]);
+                     }}
+                     tickFormatter={(t) => String(t)} />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function UserAnalysis() {
   const { ua, setUa, refreshHistory, setLastResult } = useApp();
-  const { file, parsed, mode, graphs, result } = ua;
+  const { file, parsed, mode, compModel, graphs, result } = ua;
   const navigate = useNavigate();
 
   const [parsing, setParsing] = useState(false);
   const [running, setRunning] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [tripNames, setTripNames] = useState<Record<number, string>>({});
+  const [compData, setCompData] = useState<CompressorsData>({ models: [], definitions: {}, compressors: {} });
   const fileRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    api.getTripCodes()
+      .then((list) => {
+        const m: Record<number, string> = {};
+        for (const t of list) m[t.trip_no] = t.trip_name_ko;
+        setTripNames(m);
+      })
+      .catch(() => {});
+    api.getCompressors().then(setCompData).catch(() => {});
+  }, []);
+
+  const compParams = compModel ? compData.compressors[compModel]?.parameters : undefined;
 
   const verdict = result?.verdict ?? null;
   const tripRanges = parsed
@@ -78,7 +194,7 @@ export default function UserAnalysis() {
     if (!file) { setErr("CSV/XLSX 파일을 먼저 선택하세요."); return; }
     setRunning(true); setErr(null);
     try {
-      const res = await api.analyze(file);
+      const res = await api.analyze(file, compModel || undefined);
       setUa({ result: res });
       setLastResult(res);
       await refreshHistory();
@@ -97,6 +213,12 @@ export default function UserAnalysis() {
           <TabsTrigger value="learning">학습</TabsTrigger>
         </TabsList>
         <div className="flex items-center gap-3">
+          <Select value={compModel || undefined} onValueChange={(v) => setUa({ compModel: v })}>
+            <SelectTrigger className="h-9 w-[150px]"><SelectValue placeholder="컴프 모델 선택" /></SelectTrigger>
+            <SelectContent>
+              {compData.models.map((m) => <SelectItem key={m} value={m}>{m}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Tabs value={mode} onValueChange={(v) => setMode(v as PressureMode)}>
             <TabsList>
               <TabsTrigger value="평압">평압</TabsTrigger>
@@ -108,7 +230,6 @@ export default function UserAnalysis() {
       </div>
 
       <TabsContent value="analysis" className="space-y-3 mt-3">
-        {/* 업로드 / 실행 */}
         <Card>
           <CardContent className="pt-4 space-y-3">
             <div className="flex items-center gap-2">
@@ -134,7 +255,26 @@ export default function UserAnalysis() {
           </CardContent>
         </Card>
 
-        {/* 분석 결과 (위) */}
+        {compParams && (
+          <Card>
+            <CardHeader className="pb-2"><CardTitle className="text-base">모델 파라미터 · {compModel}</CardTitle></CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+                {Object.entries(compParams).map(([k, v]) => (
+                  <div key={k} className="rounded-md border bg-muted/30 p-2">
+                    <p className="text-[11px] text-muted-foreground truncate" title={compData.definitions[k]?.display_name_ko ?? k}>
+                      {compData.definitions[k]?.display_name_ko ?? k}
+                    </p>
+                    <p className="text-sm font-medium">
+                      {v ?? "-"}{v != null && compData.definitions[k]?.unit ? ` ${compData.definitions[k]?.unit}` : ""}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">분석 결과</CardTitle>
@@ -151,6 +291,20 @@ export default function UserAnalysis() {
                     {file?.name && <b>{file.name}</b>} 파일에서 Trip 구간 <b>{parsed?.tripCount ?? 0}개</b>가 감지되었습니다.
                     {result ? <> 백엔드 판정 결과는 <b>{result.verdict}</b>입니다.</> : " (실행 시 백엔드 판정이 표시됩니다.)"}
                   </p>
+                  {parsed && (
+                    <p className="text-xs leading-relaxed">
+                      <span className="text-muted-foreground">발생 Trip Code: </span>
+                      {parsed.tripCodes.length === 0
+                        ? "없음"
+                        : parsed.tripCodes.map((c) => (tripNames[c] ? `${c} · ${tripNames[c]}` : `${c}`)).join(",  ")}
+                    </p>
+                  )}
+                  {parsed && parsed.tripRanges.length > 0 && (
+                    <p className="text-xs leading-relaxed">
+                      <span className="text-muted-foreground">트립 발생 시간(구간): </span>
+                      {parsed.tripRanges.map(([a, b]) => (a === b ? `${a}` : `${a}~${b}`)).join(",  ")}
+                    </p>
+                  )}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
                       ["Trip 구간(파일)", `${parsed?.tripCount ?? 0}개`],
@@ -170,7 +324,6 @@ export default function UserAnalysis() {
           </CardContent>
         </Card>
 
-        {/* 그래프 (아래, 여러 개) */}
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium">그래프</h3>
           <Button variant="outline" size="sm" onClick={addGraph} disabled={!parsed}>
@@ -183,50 +336,20 @@ export default function UserAnalysis() {
             파일을 선택하면 실제 시계열 그래프가 표시됩니다.
           </CardContent></Card>
         ) : (
-          graphs.map((g, gi) => {
-            const drawn = g.filter((i) => isPlottable(i, mode) && parsed.numericIndices.includes(i));
-            return (
-              <Card key={gi}>
-                <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-base">그래프 {gi + 1} <span className="text-xs text-muted-foreground">· {drawn.length}개 컬럼</span></CardTitle>
-                  {graphs.length > 1 && (
-                    <Button variant="ghost" size="sm" onClick={() => removeGraph(gi)} className="text-muted-foreground hover:text-destructive">
-                      <Trash2 className="h-4 w-4" /> 삭제
-                    </Button>
-                  )}
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectable.map((idx) => (
-                      <button key={idx} onClick={() => toggleCol(gi, idx)}
-                        className={cn("rounded-md border px-2.5 py-1 text-xs transition-colors",
-                          g.includes(idx) ? "bg-primary text-primary-foreground border-transparent" : "hover:bg-secondary/60")}>
-                        {canonicalName(idx, mode)}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="h-[300px]">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <LineChart data={parsed.series} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                        <XAxis dataKey="time" type="number" domain={["dataMin", "dataMax"]} tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} />
-                        <Tooltip />
-                        <Legend />
-                        {tripRanges.map(([a, b], i) => (
-                          <ReferenceArea key={i} x1={a} x2={b} fill="#ef4444" fillOpacity={0.12} />
-                        ))}
-                        {drawn.map((idx, i) => (
-                          <Line key={idx} type="monotone" dataKey={String(idx)} name={canonicalName(idx, mode) ?? String(idx)}
-                                stroke={LINE_COLORS[i % LINE_COLORS.length]} dot={false} strokeWidth={1.5} />
-                        ))}
-                      </LineChart>
-                    </ResponsiveContainer>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })
+          graphs.map((g, gi) => (
+            <GraphCard
+              key={gi}
+              parsed={parsed}
+              mode={mode}
+              tripRanges={tripRanges}
+              cols={g}
+              selectable={selectable}
+              index={gi}
+              canRemove={graphs.length > 1}
+              onToggle={(idx) => toggleCol(gi, idx)}
+              onRemove={() => removeGraph(gi)}
+            />
+          ))
         )}
 
         <div className="flex gap-2">

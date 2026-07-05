@@ -206,6 +206,16 @@ def get_analysis_result_by_id(result_id: int) -> AnalysisResult | None:
         return session.get(AnalysisResult, result_id)
 
 
+def delete_analysis_result(result_id: int) -> bool:
+    """분석 결과를 id로 삭제한다 (ADM-002 히스토리 삭제용). 존재해서 삭제하면 True."""
+    with get_session() as session:
+        row = session.get(AnalysisResult, result_id)
+        if not row:
+            return False
+        session.delete(row)
+        return True
+
+
 def get_analysis_result(file_id: int) -> AnalysisResult | None:
     """특정 파일의 최신 분석 결과 조회."""
     with get_session() as session:

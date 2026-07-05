@@ -1,0 +1,255 @@
+{
+  "parameter_library_name": "comp_control_parameters",
+  "parameter_library_version": "2.1.0",
+  "description": "Compressor 모델별 제어 파라미터 라이브러리. 수기 입력과 유지보수를 쉽게 하기 위해 공통 파라미터 정의와 컴프별 값을 분리한다.",
+  "mapping_policy": {
+    "primary_key": "comp_model",
+    "note": "컴프가 추가될 경우 compressors 항목에 모델명과 parameters 값만 추가한다."
+  },
+  "parameter_definitions": {
+    "cc": {
+      "display_name_ko": "압축기 용량 코드",
+      "unit": "cc_code",
+      "category": "basic_info",
+      "description": "Compressor 용량 또는 모델 구분용 코드"
+    },
+    "oil_supply_frequency": {
+      "display_name_ko": "급유운전 주파수",
+      "unit": "Hz",
+      "category": "operation",
+      "source_name": "Oiling_Freq",
+      "parameter_key": "oil_supply_operation",
+      "description": "급유운전 시 적용되는 운전 주파수"
+    },
+    "oil_supply_time": {
+      "display_name_ko": "급유운전 시간",
+      "unit": "s",
+      "category": "operation",
+      "source_name": "Oiling_Time",
+      "parameter_key": "oil_supply_operation",
+      "description": "급유운전 유지 시간"
+    },
+    "valve_protection_frequency": {
+      "display_name_ko": "밸브보호운전 주파수",
+      "unit": "Hz",
+      "category": "operation",
+      "source_name": "Valve_Protect_Freq",
+      "parameter_key": "valve_protection_operation",
+      "description": "밸브보호운전 시 적용되는 운전 주파수"
+    },
+    "valve_protection_time": {
+      "display_name_ko": "밸브보호운전 시간",
+      "unit": "s",
+      "category": "operation",
+      "source_name": "Valve_Protect_Time",
+      "parameter_key": "valve_protection_operation",
+      "description": "밸브보호운전 유지 시간"
+    },
+    "shunt_over_current": {
+      "display_name_ko": "전류 Trip Level",
+      "unit": "A",
+      "category": "trip",
+      "source_name": "Current_Trip_Level",
+      "used_by_trip_no": 6,
+      "related_trip_key": "OVERCURRENT_SHUNT",
+      "related_csv_column": {
+        "column_index": 1,
+        "canonical_name": "Imag"
+      },
+      "csv_applicable": false,
+      "description": "과전류 Trip 판단에 사용하는 내부 전류 기준값",
+      "agent_warning": "이 값은 실제 내부 전류 Trip 기준이며 CSV의 Imag 값과 직접 비교하지 않는다. Imag는 높음, 낮음, 급증, 불안정 등 정성적 보조 신호로만 활용한다."
+    },
+    "power_over": {
+      "display_name_ko": "파워 Trip Level",
+      "unit": "W",
+      "category": "trip",
+      "source_name": "Power_Trip_Level",
+      "used_by_trip_no": 9,
+      "related_trip_key": "POWER_OVERLOAD",
+      "related_csv_column": {
+        "column_index": 7,
+        "canonical_name": "Power"
+      },
+      "description": "Power Trip 판단에 사용하는 모델별 출력 기준값"
+    },
+    "off_frequency": {
+      "display_name_ko": "OFF 운전 주파수",
+      "unit": "Hz",
+      "category": "operation",
+      "source_name": "OFF_Freq",
+      "parameter_key": "off_operation",
+      "description": "OFF 운전 또는 정지 전 제어 시 적용되는 주파수"
+    },
+    "off_time": {
+      "display_name_ko": "OFF 운전 시간",
+      "unit": "s",
+      "category": "operation",
+      "source_name": "OFF_Time",
+      "parameter_key": "off_operation",
+      "description": "OFF 운전 또는 정지 전 제어 유지 시간"
+    },
+    "torque_limit_by_model": {
+      "display_name_ko": "평균토크 Trip Level",
+      "unit": "internal_unit",
+      "category": "trip",
+      "source_name": "Avg_Torque_Level",
+      "used_by_trip_no": 12,
+      "related_trip_key": "AVERAGE_TORQUE_OVER",
+      "related_csv_column": {
+        "column_index": 19,
+        "canonical_name": "Avg_Torque"
+      },
+      "description": "평균토크 Trip 판단에 사용하는 모델별 기준값",
+      "agent_warning": "현재 값은 원본 표 기준 55, 65, 75 등으로 입력한다. 실제 Avg_Torque CSV 스케일이 0.55, 0.65, 0.75인지 확인되면 scale_factor로 보정한다."
+    }
+  },
+  "compressors": {
+    "BMK090NEMV": {
+      "parameters": {
+        "cc": 9,
+        "oil_supply_frequency": 25,
+        "oil_supply_time": 10,
+        "valve_protection_frequency": 40,
+        "valve_protection_time": 120,
+        "shunt_over_current": 4.3,
+        "power_over": 275,
+        "off_frequency": 25,
+        "off_time": 3,
+        "torque_limit_by_model": 55
+      },
+      "metadata": {
+        "note": "",
+        "last_updated": ""
+      }
+    },
+    "BMK110NEMV": {
+      "parameters": {
+        "cc": 11,
+        "oil_supply_frequency": 25,
+        "oil_supply_time": 10,
+        "valve_protection_frequency": 29,
+        "valve_protection_time": 120,
+        "shunt_over_current": 4.2,
+        "power_over": 300,
+        "off_frequency": 25,
+        "off_time": 3,
+        "torque_limit_by_model": 65
+      },
+      "metadata": {
+        "note": "",
+        "last_updated": ""
+      }
+    },
+    "BMK140NEMV": {
+      "parameters": {
+        "cc": 14,
+        "oil_supply_frequency": 25,
+        "oil_supply_time": 60,
+        "valve_protection_frequency": 45,
+        "valve_protection_time": 120,
+        "shunt_over_current": 4.2,
+        "power_over": 325,
+        "off_frequency": 27,
+        "off_time": 3,
+        "torque_limit_by_model": 75
+      },
+      "metadata": {
+        "note": "",
+        "last_updated": ""
+      }
+    },
+    "BMH130NCMV": {
+      "parameters": {
+        "cc": 13,
+        "oil_supply_frequency": 25,
+        "oil_supply_time": 60,
+        "valve_protection_frequency": 48,
+        "valve_protection_time": 120,
+        "shunt_over_current": 4.2,
+        "power_over": 325,
+        "off_frequency": 27,
+        "off_time": 3,
+        "torque_limit_by_model": 75
+      },
+      "metadata": {
+        "note": "",
+        "last_updated": ""
+      }
+    },
+    "BMK140NHMV": {
+      "parameters": {
+        "cc": 14,
+        "oil_supply_frequency": 25,
+        "oil_supply_time": 60,
+        "valve_protection_frequency": 45,
+        "valve_protection_time": 120,
+        "shunt_over_current": 4.3,
+        "power_over": 325,
+        "off_frequency": 27,
+        "off_time": 3,
+        "torque_limit_by_model": 75
+      },
+      "metadata": {
+        "note": "",
+        "last_updated": ""
+      }
+    },
+    "BMK090NLMV": {
+      "parameters": {
+        "cc": 9,
+        "oil_supply_frequency": 25,
+        "oil_supply_time": 10,
+        "valve_protection_frequency": 40,
+        "valve_protection_time": 120,
+        "shunt_over_current": 4.2,
+        "power_over": 275,
+        "off_frequency": 25,
+        "off_time": 3,
+        "torque_limit_by_model": 55
+      },
+      "metadata": {
+        "note": "",
+        "last_updated": ""
+      }
+    },
+    "BMK110NLMV": {
+      "parameters": {
+        "cc": 11,
+        "oil_supply_frequency": 25,
+        "oil_supply_time": 10,
+        "valve_protection_frequency": 29,
+        "valve_protection_time": 120,
+        "shunt_over_current": 4.2,
+        "power_over": 300,
+        "off_frequency": 25,
+        "off_time": 3,
+        "torque_limit_by_model": 65
+      },
+      "metadata": {
+        "note": "",
+        "last_updated": ""
+      }
+    }
+  },
+  "manual_input_template": {
+    "NEW_COMP_MODEL_NAME": {
+      "parameters": {
+        "cc": null,
+        "oil_supply_frequency": null,
+        "oil_supply_time": null,
+        "valve_protection_frequency": null,
+        "valve_protection_time": null,
+        "shunt_over_current": null,
+        "power_over": null,
+        "off_frequency": null,
+        "off_time": null,
+        "torque_limit_by_model": null
+      },
+      "metadata": {
+        "note": "",
+        "last_updated": ""
+      }
+    }
+  }
+}

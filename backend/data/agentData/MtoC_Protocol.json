@@ -1,0 +1,552 @@
+{
+  "protocol_name": "MtoC_protocol",
+  "protocol_version": "1.0.0",
+  "description": "Main Controller에서 Compressor Controller로 전달되는 8bit 제어 프로토콜 해석 기준이다. CSV Raw Data의 15번 컬럼 MtoC 값을 10진수로 읽은 뒤 8bit binary로 변환하여 bit별 의미를 해석한다.",
+  "related_column": {
+    "column_index": 15,
+    "canonical_name": "MtoC",
+    "display_name_ko": "Main to Comp 통신 데이터",
+    "description_ko": "상위제어기로부터 수신되는 Compressor 제어용 8bit 통신 데이터이다. 이 값으로 Compressor On/Off, Valve 상태, RT 조건, 제상 후 지연 상태, LQC 모드 등을 해석한다."
+  },
+  "mapping_policy": {
+    "raw_value_format": "decimal",
+    "decode_method": "decimal_to_8bit_binary",
+    "bit_order": {
+      "bit0": "least_significant_bit",
+      "bit7": "most_significant_bit"
+    },
+    "example": {
+      "decimal_value": 5,
+      "binary_8bit": "00000101",
+      "interpretation": "bit0=1, bit2=1"
+    },
+    "note": "CSV에는 MtoC 값이 10진수로 저장되므로, Agent는 해당 값을 8bit 이진수로 변환한 뒤 각 bit를 해석한다."
+  },
+  "bit_definitions": [
+    {
+      "bit_index": 0,
+      "bit_name": "comp_on_off",
+      "display_name_ko": "Comp On/Off",
+      "used_by_comp_controller": true,
+      "importance": "high",
+      "value_meaning": {
+        "0": "Comp Off",
+        "1": "Comp On"
+      },
+      "decimal_rule": {
+        "rule": "MtoC 값이 홀수이면 bit0=1로 Comp On, 짝수이면 bit0=0으로 Comp Off로 해석할 수 있다.",
+        "odd_value": "Comp On",
+        "even_value": "Comp Off"
+      },
+      "description_ko": "Compressor On/Off를 결정하는 가장 중요한 bit이다. 실제 Compressor 제어기에서 사용하는 bit이며, Compressor 운전 여부 판단의 핵심 기준이다.",
+      "analysis_usage": [
+        "bit0이 1인데 Real_Hz가 상승하지 않으면 Comp On 명령 대비 실제 기동 실패 가능성을 검토한다.",
+        "bit0이 0인데 Real_Hz가 유지되면 Off 명령 이후 정지 지연 또는 운전 유지 조건을 확인한다.",
+        "Trip 발생 전후 bit0 변화와 Real_Hz, Ramp_Hz 변화를 함께 확인한다."
+      ],
+      "related_columns": [
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "Comp 실제 운전 여부 확인"
+        },
+        {
+          "column_index": 10,
+          "canonical_name": "Ramp_Hz",
+          "role": "Comp 내부 지령속도 확인"
+        },
+        {
+          "column_index": 20,
+          "canonical_name": "Trip",
+          "role": "Comp 보호정지 여부 확인"
+        }
+      ]
+    },
+    {
+      "bit_index": 1,
+      "bit_name": "comp_select",
+      "display_name_ko": "Comp Select",
+      "used_by_comp_controller": false,
+      "importance": "low",
+      "value_meaning": {
+        "0": "Comp1",
+        "1": "Comp2"
+      },
+      "description_ko": "Compressor 종류 또는 선택 정보를 의미한다. 현재 실제 Compressor 제어기에서는 이 bit를 이용해 제어하지 않는다.",
+      "analysis_usage": [
+        "일반 분석에서는 주요 판단 기준으로 사용하지 않는다.",
+        "필요 시 데이터에 기록된 Comp 선택 상태를 참고 정보로만 확인한다."
+      ],
+      "related_columns": []
+    },
+    {
+      "bit_index": 2,
+      "bit_name": "valve_state_bit0",
+      "display_name_ko": "Valve 상태 bit0",
+      "used_by_comp_controller": true,
+      "importance": "high",
+      "value_meaning": {
+        "0": "Valve 조합 해석용 bit",
+        "1": "Valve 조합 해석용 bit"
+      },
+      "description_ko": "3-way Valve 상태를 표현하는 하위 bit이다. bit3과 함께 Valve 상태를 해석하며, 평압/차압 조건 판단에 사용된다.",
+      "analysis_usage": [
+        "bit2와 bit3 조합으로 Valve Open/Close 상태를 판단한다.",
+        "차압 조건에서 Comp Off 시 Valve Close 여부를 확인한다.",
+        "Comp 재운전 직전 Valve Open 여부를 확인한다."
+      ],
+      "related_columns": [
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "Comp 운전 상태 확인"
+        },
+        {
+          "column_index": 9,
+          "canonical_name": "Trial_Count",
+          "data_type": "DPS",
+          "role": "차압기동 재기동 여부 확인"
+        },
+        {
+          "column_index": 16,
+          "canonical_name": "1st_Freq",
+          "data_type": "DPS",
+          "role": "차압기동 1차 판단속도 확인"
+        },
+        {
+          "column_index": 17,
+          "canonical_name": "2nd_Freq",
+          "data_type": "DPS",
+          "role": "차압기동 2차 판단속도 확인"
+        }
+      ]
+    },
+    {
+      "bit_index": 3,
+      "bit_name": "valve_state_bit1",
+      "display_name_ko": "Valve 상태 bit1",
+      "used_by_comp_controller": true,
+      "importance": "high",
+      "value_meaning": {
+        "0": "Valve 조합 해석용 bit",
+        "1": "Valve 조합 해석용 bit"
+      },
+      "description_ko": "3-way Valve 상태를 표현하는 상위 bit이다. bit2와 함께 Valve 상태를 해석하며, 평압/차압 조건 판단에 사용된다.",
+      "analysis_usage": [
+        "bit2와 bit3 조합으로 Valve 상태를 판단한다.",
+        "평압 조건에서는 Valve가 항시 Open 상태인지 확인한다.",
+        "차압 조건에서는 Comp Off 시 Valve Close, 재운전 직전 Valve Open 시퀀스를 확인한다."
+      ],
+      "related_columns": [
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "Comp 운전 상태 확인"
+        },
+        {
+          "column_index": 9,
+          "canonical_name": "Trial_Count",
+          "data_type": "DPS",
+          "role": "차압기동 재기동 여부 확인"
+        },
+        {
+          "column_index": 20,
+          "canonical_name": "Trip",
+          "role": "Valve 상태와 Trip 발생 관계 확인"
+        }
+      ]
+    },
+    {
+      "bit_index": 4,
+      "bit_name": "rt_state_bit0",
+      "display_name_ko": "RT 온도 정보 bit0",
+      "used_by_comp_controller": true,
+      "importance": "medium",
+      "value_meaning": {
+        "0": "RT 조합 해석용 bit",
+        "1": "RT 조합 해석용 bit"
+      },
+      "description_ko": "RT 온도 조건을 표현하는 하위 bit이다. bit5와 함께 저온, 중온, 고온, TestMode를 구분한다.",
+      "analysis_usage": [
+        "bit4와 bit5 조합으로 RT 온도 조건을 판단한다.",
+        "평압기동에서는 RT 조건이 동일하게 사용된다.",
+        "차압기동에서는 RT 온도 조건에 따라 차압기동 적용 여부가 달라질 수 있으므로 DPS 분석 시 중요하게 확인한다."
+      ],
+      "related_columns": [
+        {
+          "column_index": 9,
+          "canonical_name": "Trial_Count",
+          "data_type": "DPS",
+          "role": "RT 조건에 따른 차압기동 재시도 여부 확인"
+        },
+        {
+          "column_index": 16,
+          "canonical_name": "1st_Freq",
+          "data_type": "DPS",
+          "role": "RT 조건별 기동 초기 속도 확인"
+        },
+        {
+          "column_index": 17,
+          "canonical_name": "2nd_Freq",
+          "data_type": "DPS",
+          "role": "RT 조건별 기동 후속 속도 확인"
+        }
+      ]
+    },
+    {
+      "bit_index": 5,
+      "bit_name": "rt_state_bit1",
+      "display_name_ko": "RT 온도 정보 bit1",
+      "used_by_comp_controller": true,
+      "importance": "medium",
+      "value_meaning": {
+        "0": "RT 조합 해석용 bit",
+        "1": "RT 조합 해석용 bit"
+      },
+      "description_ko": "RT 온도 조건을 표현하는 상위 bit이다. bit4와 함께 저온, 중온, 고온, TestMode를 구분한다.",
+      "analysis_usage": [
+        "bit4와 bit5 조합으로 RT 온도 조건을 판단한다.",
+        "차압기동 분석 시 RT 조건에 따른 차압기동 적용 여부를 확인한다.",
+        "RT 조건과 Trial_Count, 1st_Freq, 2nd_Freq 패턴을 함께 분석한다."
+      ],
+      "related_columns": [
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "RT 조건별 실제 운전 패턴 확인"
+        },
+        {
+          "column_index": 9,
+          "canonical_name": "Trial_Count",
+          "data_type": "DPS",
+          "role": "RT 조건별 차압기동 재시도 여부 확인"
+        }
+      ]
+    },
+    {
+      "bit_index": 6,
+      "bit_name": "after_defrost_comp_delay",
+      "display_name_ko": "제상 후 Comp 지연 상태",
+      "used_by_comp_controller": false,
+      "importance": "medium",
+      "value_meaning": {
+        "0": "일반 상태",
+        "1": "제상 후 Comp 지연 상태"
+      },
+      "description_ko": "제상 후 Compressor 지연 상태를 의미한다. 실제 Compressor 제어기에서 사용하는 bit는 아니지만, Main에서 Comp On 신호를 주지 않는 이유나 Compressor가 켜지지 않는 배경 정보로 활용할 수 있다.",
+      "analysis_usage": [
+        "bit6이 1이면 제상 후 지연 상태로 인해 Comp On 명령이 지연될 가능성을 검토한다.",
+        "Comp가 켜지지 않는 상황에서 bit0이 Off이고 bit6이 1이면 제상 후 지연 상태를 참고 원인으로 제시한다.",
+        "이 bit는 Comp 제어기 내부 판단 기준이 아니라 상위제어기 상태 참고 정보로 해석한다."
+      ],
+      "related_columns": [
+        {
+          "column_index": 4,
+          "canonical_name": "Ref_Hz",
+          "role": "상위제어기 지령 주파수 여부 확인"
+        },
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "Comp 실제 운전 여부 확인"
+        },
+        {
+          "column_index": 10,
+          "canonical_name": "Ramp_Hz",
+          "role": "Comp 내부 지령 여부 확인"
+        }
+      ]
+    },
+    {
+      "bit_index": 7,
+      "bit_name": "lqc_mode",
+      "display_name_ko": "LQC 모드",
+      "used_by_comp_controller": false,
+      "importance": "low",
+      "value_meaning": {
+        "0": "일반 모드",
+        "1": "LQC 모드"
+      },
+      "description_ko": "LQC 모드 진입 여부를 의미한다. Compressor 제어기에서 직접 제어에 사용하는 bit는 아니며, LQC 모드가 들어갔다는 상태 정보로만 확인한다.",
+      "analysis_usage": [
+        "bit7이 1이면 LQC 모드 상태로 기록한다.",
+        "일반 Trip 또는 기동성 판단의 직접 원인으로 단정하지 않는다.",
+        "필요 시 시험 조건 또는 세트 운전 모드 참고 정보로 사용한다."
+      ],
+      "related_columns": []
+    }
+  ],
+  "combined_bit_maps": {
+    "comp_on_off": {
+      "bits": [0],
+      "mapping": {
+        "0": {
+          "state": "off",
+          "description_ko": "Comp Off"
+        },
+        "1": {
+          "state": "on",
+          "description_ko": "Comp On"
+        }
+      }
+    },
+    "comp_select": {
+      "bits": [1],
+      "mapping": {
+        "0": {
+          "state": "Comp1",
+          "description_ko": "Comp1 선택"
+        },
+        "1": {
+          "state": "Comp2",
+          "description_ko": "Comp2 선택"
+        }
+      },
+      "agent_note": "현재 실제 Compressor 제어기에서는 이 bit를 제어에 사용하지 않는다."
+    },
+    "valve_state": {
+      "bits": [3, 2],
+      "mapping": {
+        "00": {
+          "state": "both_close",
+          "display_name_ko": "Both close",
+          "description_ko": "Valve가 모두 닫힌 상태"
+        },
+        "01": {
+          "state": "r_open",
+          "display_name_ko": "R open",
+          "description_ko": "R 측 Valve Open 상태"
+        },
+        "10": {
+          "state": "f_open",
+          "display_name_ko": "F open",
+          "description_ko": "F 측 Valve Open 상태"
+        },
+        "11": {
+          "state": "both_open",
+          "display_name_ko": "Both open",
+          "description_ko": "Valve가 모두 열린 상태"
+        }
+      },
+      "agent_note": "Valve 상태는 평압/차압 조건 판단에 중요하다. 평압은 항시 Open 상태이며, 차압에서는 Comp Off 시 Valve Close로 압을 유지하고 재운전 직전 Valve Open으로 냉매 흐름을 만든다."
+    },
+    "rt_state": {
+      "bits": [5, 4],
+      "mapping": {
+        "00": {
+          "state": "low_temp",
+          "display_name_ko": "저온",
+          "description_ko": "저온 조건"
+        },
+        "01": {
+          "state": "middle_temp",
+          "display_name_ko": "중온",
+          "description_ko": "중온 조건"
+        },
+        "10": {
+          "state": "high_temp",
+          "display_name_ko": "고온",
+          "description_ko": "고온 조건"
+        },
+        "11": {
+          "state": "test_mode",
+          "display_name_ko": "TestMode",
+          "description_ko": "TestMode 조건"
+        }
+      },
+      "agent_note": "RT 조건은 실제 Compressor 제어기에서 사용하는 정보이다. 평압기동에서는 동일하게 사용하지만, 차압기동에서는 온도 조건에 따라 차압기동 적용 여부가 달라질 수 있다."
+    },
+    "after_defrost_comp_delay": {
+      "bits": [6],
+      "mapping": {
+        "0": {
+          "state": "normal",
+          "display_name_ko": "일반",
+          "description_ko": "일반 상태"
+        },
+        "1": {
+          "state": "after_defrost_delay",
+          "display_name_ko": "제상 후 Comp 지연 상태",
+          "description_ko": "제상 후 Comp 지연 상태"
+        }
+      },
+      "agent_note": "Compressor 제어기에서 직접 사용하는 bit는 아니지만, Main에서 Comp On 신호를 주지 않는 이유를 설명하는 참고 정보가 될 수 있다."
+    },
+    "lqc_mode": {
+      "bits": [7],
+      "mapping": {
+        "0": {
+          "state": "normal",
+          "display_name_ko": "일반",
+          "description_ko": "일반 모드"
+        },
+        "1": {
+          "state": "lqc",
+          "display_name_ko": "LQC 모드",
+          "description_ko": "LQC 모드"
+        }
+      },
+      "agent_note": "Compressor 제어기에서 직접 사용하는 bit는 아니며, LQC 모드 진입 여부만 확인한다."
+    }
+  },
+  "decoded_output_schema": {
+    "decimal_value": "원본 MtoC 10진수 값",
+    "binary_8bit": "8bit binary 변환값",
+    "bit0_comp_on_off": "Comp On/Off",
+    "bit1_comp_select": "Comp Select",
+    "bit2_valve_state_bit0": "Valve bit0",
+    "bit3_valve_state_bit1": "Valve bit1",
+    "valve_state": "bit3~bit2 조합으로 해석한 Valve 상태",
+    "bit4_rt_state_bit0": "RT bit0",
+    "bit5_rt_state_bit1": "RT bit1",
+    "rt_state": "bit5~bit4 조합으로 해석한 RT 상태",
+    "bit6_after_defrost_comp_delay": "제상 후 Comp 지연 상태",
+    "bit7_lqc_mode": "LQC 모드"
+  },
+  "analysis_rules": [
+    {
+      "rule_id": "MTOC_ONOFF_001",
+      "rule_name_ko": "Comp On/Off 명령 대비 실제 운전 확인",
+      "data_type": "COMMON",
+      "required_columns": [
+        {
+          "column_index": 15,
+          "canonical_name": "MtoC",
+          "role": "Comp On/Off 명령 확인"
+        },
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "실제 Comp 운전 여부 확인"
+        },
+        {
+          "column_index": 10,
+          "canonical_name": "Ramp_Hz",
+          "role": "내부 지령속도 확인"
+        }
+      ],
+      "logic_ko": "MtoC의 bit0이 1인데 Real_Hz가 상승하지 않으면 On 명령 대비 실제 기동 실패 또는 제어 제한 가능성을 검토한다. bit0이 0인데 Real_Hz가 유지되면 Off 명령 후 정지 지연 또는 특수 운전 조건을 확인한다.",
+      "severity": "WARNING",
+      "llm_instruction": "Comp On/Off 판단 시 MtoC의 bit0을 우선 확인하고, Real_Hz 및 Ramp_Hz와 함께 실제 운전 상태를 설명한다."
+    },
+    {
+      "rule_id": "MTOC_VALVE_001",
+      "rule_name_ko": "Valve 상태 기반 평압/차압 조건 확인",
+      "data_type": "COMMON",
+      "required_columns": [
+        {
+          "column_index": 15,
+          "canonical_name": "MtoC",
+          "role": "Valve 상태 bit2~bit3 확인"
+        },
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "Comp 운전 상태 확인"
+        }
+      ],
+      "optional_columns": [
+        {
+          "column_index": 9,
+          "canonical_name": "Trial_Count",
+          "data_type": "DPS",
+          "role": "차압기동 재기동 여부 확인"
+        },
+        {
+          "column_index": 16,
+          "canonical_name": "1st_Freq",
+          "data_type": "DPS",
+          "role": "차압기동 1차 판단속도 확인"
+        },
+        {
+          "column_index": 17,
+          "canonical_name": "2nd_Freq",
+          "data_type": "DPS",
+          "role": "차압기동 2차 판단속도 확인"
+        }
+      ],
+      "logic_ko": "bit2와 bit3 조합으로 Valve 상태를 해석한다. 평압 조건에서는 Valve가 Open 상태인지 확인하고, 차압 조건에서는 Comp Off 시 Close로 압을 유지한 뒤 재운전 직전 Open되는 시퀀스를 확인한다.",
+      "severity": "INFO",
+      "llm_instruction": "Valve 상태는 평압/차압 조건 해석의 핵심 근거로 사용한다. 단, 실제 압력값은 CSV에 없으므로 Valve 상태만으로 압력 크기를 단정하지 않는다."
+    },
+    {
+      "rule_id": "MTOC_RT_001",
+      "rule_name_ko": "RT 조건 기반 차압기동 적용 여부 확인",
+      "data_type": "DPS",
+      "required_columns": [
+        {
+          "column_index": 15,
+          "canonical_name": "MtoC",
+          "role": "RT 조건 bit4~bit5 확인"
+        },
+        {
+          "column_index": 9,
+          "canonical_name": "Trial_Count",
+          "role": "RT 조건별 재기동 횟수 확인"
+        },
+        {
+          "column_index": 16,
+          "canonical_name": "1st_Freq",
+          "role": "RT 조건별 1차 판단속도 확인"
+        },
+        {
+          "column_index": 17,
+          "canonical_name": "2nd_Freq",
+          "role": "RT 조건별 2차 판단속도 확인"
+        }
+      ],
+      "logic_ko": "bit4와 bit5 조합으로 RT 조건을 해석하고, 차압기동에서 온도 조건에 따라 차압기동 적용 여부 또는 재기동 패턴이 달라지는지 확인한다.",
+      "severity": "INFO",
+      "llm_instruction": "RT 조건은 차압기동 분석 시 Trial_Count, 1st_Freq, 2nd_Freq와 함께 설명한다."
+    },
+    {
+      "rule_id": "MTOC_DEFROST_DELAY_001",
+      "rule_name_ko": "제상 후 Comp 지연 상태 확인",
+      "data_type": "COMMON",
+      "required_columns": [
+        {
+          "column_index": 15,
+          "canonical_name": "MtoC",
+          "role": "제상 후 Comp 지연 상태 bit6 확인"
+        },
+        {
+          "column_index": 4,
+          "canonical_name": "Ref_Hz",
+          "role": "외부 지령 주파수 확인"
+        },
+        {
+          "column_index": 5,
+          "canonical_name": "Real_Hz",
+          "role": "실제 Comp 운전 여부 확인"
+        }
+      ],
+      "logic_ko": "bit6이 1이면 제상 후 Comp 지연 상태로 해석할 수 있다. Comp가 켜지지 않는 상황에서 Main이 On 신호를 주지 않는 배경 정보로 참고한다.",
+      "severity": "INFO",
+      "llm_instruction": "bit6은 Compressor 제어기에서 직접 사용하는 bit가 아니므로 원인으로 단정하지 않고 Main 제어 상태의 참고 정보로 설명한다."
+    },
+    {
+      "rule_id": "MTOC_LQC_001",
+      "rule_name_ko": "LQC 모드 확인",
+      "data_type": "COMMON",
+      "required_columns": [
+        {
+          "column_index": 15,
+          "canonical_name": "MtoC",
+          "role": "LQC 모드 bit7 확인"
+        }
+      ],
+      "logic_ko": "bit7이 1이면 LQC 모드 상태로 기록한다. Compressor 제어기에서 직접 사용하는 bit는 아니므로 분석 시 참고 정보로만 활용한다.",
+      "severity": "INFO",
+      "llm_instruction": "LQC 모드는 상태 정보로만 언급하고 Trip 또는 기동 실패의 직접 원인으로 단정하지 않는다."
+    }
+  ],
+  "agent_global_instruction": [
+    "MtoC 값은 10진수로 입력되므로 반드시 8bit binary로 변환한 뒤 bit별로 해석한다.",
+    "bit0은 Comp On/Off 판단의 핵심 bit이다.",
+    "bit2~bit3은 Valve 상태로, 평압/차압 조건 해석에 중요하다.",
+    "bit4~bit5는 RT 조건으로, 특히 권선온도 보호로직, DPS 차압기동 분석 시 중요하다.",
+    "bit6은 제상 후 Comp 지연 상태로 참고 정보이며, Compressor 제어기에서 직접 사용하는 bit는 아니다.",
+    "bit7은 LQC 모드 여부만 확인하며, Compressor 제어기에서 직접 사용하는 bit는 아니다.",
+    "CSV에 실제 압력값은 없으므로 Valve 상태만으로 압력 크기를 단정하지 않는다."
+  ]
+}
