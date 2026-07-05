@@ -58,7 +58,10 @@ function GraphCard({ parsed, mode, tripRanges, cols, selectable, index, canRemov
 
   const [inS, setInS] = useState("");
   const [inE, setInE] = useState("");
+  const [yMax, setYMax] = useState("");
   useEffect(() => { setInS(String(Math.round(startTime))); setInE(String(Math.round(endTime))); }, [startTime, endTime]);
+
+  const yMaxNum = yMax !== "" && Number.isFinite(Number(yMax)) ? Number(yMax) : null;
 
   const applyTime = () => {
     const s = Number(inS), e = Number(inE);
@@ -102,6 +105,8 @@ function GraphCard({ parsed, mode, tripRanges, cols, selectable, index, canRemov
                  onKeyDown={(e) => e.key === "Enter" && applyTime()} className="h-7 w-28" />
           <Button size="sm" variant="outline" className="h-7" onClick={applyTime}>적용</Button>
           <Button size="sm" variant="ghost" className="h-7" onClick={resetRange}>리셋</Button>
+          <span className="text-muted-foreground shrink-0 ml-2">Y축 최대</span>
+          <Input type="number" value={yMax} onChange={(e) => setYMax(e.target.value)} placeholder="auto" className="h-7 w-24" />
         </div>
 
         <div className="h-[300px]">
@@ -109,7 +114,7 @@ function GraphCard({ parsed, mode, tripRanges, cols, selectable, index, canRemov
             <LineChart data={parsed.series} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
               <XAxis dataKey="time" type="number" domain={["dataMin", "dataMax"]} tick={{ fontSize: 11 }} />
-              <YAxis tick={{ fontSize: 11 }} />
+              <YAxis tick={{ fontSize: 11 }} domain={[0, yMaxNum ?? "auto"]} allowDataOverflow={yMaxNum !== null} />
               <Tooltip />
               <Legend />
               {tripRanges.map(([a, b], i) => (
