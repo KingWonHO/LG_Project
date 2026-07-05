@@ -22,12 +22,18 @@ export default function EngineerAdmin() {
   const [promptText, setPromptText] = useState("");
   const [s, setS] = useState({ trip: "", base: "", prompt: "" });
   const [rag, setRag] = useState("");
+  const [ragName, setRagName] = useState("");
+  const [ragInterp, setRagInterp] = useState("");
+  const [ragFile, setRagFile] = useState<File | null>(null);
+  const [ragAdd, setRagAdd] = useState("");
+  const [ragCount, setRagCount] = useState<number | null>(null);
 
   useEffect(() => {
     if (role !== "engineer") return;
     api.getTripCodes().then(setTrips).catch(() => {});
     api.getBaseline().then(setBaselines).catch(() => {});
     api.getPrompt().then((p) => { setPromptVer(p.version ?? ""); setPromptText(p.text); }).catch(() => {});
+    api.engineerRulesStatus().then((r) => setRagCount(r.count)).catch(() => {});
   }, [role]);
 
   if (role !== "engineer") {
@@ -50,7 +56,6 @@ export default function EngineerAdmin() {
     catch (e: any) { setS((p) => ({ ...p, trip: "저장 실패: " + e.message })); }
   };
 
-  // RAG-001: Trip Code DB 수정 내용을 ChromaDB(RAG 색인)에 반영
   const reindexRag = async () => {
     setRag("재인덱싱 중…");
     try { const r = await api.ragIndex(); setRag(`재인덱싱 완료 (${r.indexed}건)`); }
@@ -74,13 +79,24 @@ export default function EngineerAdmin() {
     catch (e: any) { setS((p) => ({ ...p, prompt: "저장 실패: " + e.message })); }
   };
 
+  const submitRagRule = async () => {
+    if (!ragName || !ragInterp || !ragFile) { setRagAdd("룰 이름·해석·CSV를 모두 입력하세요."); return; }
+    setRagAdd("등록 중…");
+    try {
+      const r = await api.addEngineerRule(ragName, ragInterp, ragFile);
+      setRagAdd(`등록 완료 (판정 ${r.verdict}, 총 ${r.count}건)`);
+      setRagCount(r.count);
+      setRagName(""); setRagInterp(""); setRagFile(null);
+    } catch (e: any) { setRagAdd("등록 실패: " + e.message); }
+  };
+
   const numOrNull = (v: string) => (v === "" ? null : Number(v));
 
   return (
     <div className="space-y-4 max-w-4xl">
       <div>
         <h2 className="text-lg font-medium">엔지니어 관리</h2>
-        <p className="text-sm text-muted-foreground">Trip Code · 정상 기준 · Prompt 등록/수정 (백엔드 연동)</p>
+        <p className="text-sm text-muted-foreground">Trip Code · 정상 기준 · Prompt · RAG 룰 등록/수정 (백엔드 연동)</p>
       </div>
 
       <Tabs defaultValue="trip">
@@ -88,6 +104,7 @@ export default function EngineerAdmin() {
           <TabsTrigger value="trip">Trip Code</TabsTrigger>
           <TabsTrigger value="baseline">정상 기준</TabsTrigger>
           <TabsTrigger value="prompt">Prompt</TabsTrigger>
+          <TabsTrigger value="ragrule">RAG 룰</TabsTrigger>
         </TabsList>
 
         <TabsContent value="trip">
@@ -166,6 +183,29 @@ export default function EngineerAdmin() {
               <Input placeholder="버전 (예: v1)" value={promptVer} onChange={(e) => setPromptVer(e.target.value)} className="max-w-[200px]" />
               <textarea className="w-full h-48 rounded-md border bg-transparent p-3 text-sm" value={promptText} onChange={(e) => setPromptText(e.target.value)} />
               <Button size="sm" onClick={savePrompt}>저장 (DB 반영)</Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="ragrule">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between space-y-0">
+              <CardTitle>엔지니어 RAG 룰 추가</CardTitle>
+              {ragCount !== null && <span className="text-xs text-muted-foreground">등록됨 {ragCount}건</span>}
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <p className="text-xs text-muted-foreground">
+                대표 CSV와 해석 룰을 등록하면, 이후 <b>유사한 분석</b>에서 이 룰이 기존 Trip Code보다 우선 참고됩니다.
+                (CSV를 분석한 판정·트립·이탈 시그니처로 유사도 판단)
+              </p>
+              <Input placeholder="룰 이름" value={ragName} onChange={(e) => setRagName(e.target.value)} className="max-w-[300px]" />
+              <textarea className="w-full h-32 rounded-md border bg-transparent p-3 text-sm"
+                        placeholder="해석/조치 내용 (자유서술)" value={ragInterp} onChange={(e) => setRagInterp(e.target.value)} />
+              <input type="file" accept=".csv,.xlsx" onChange={(e) => setRagFile(e.target.files?.[0] ?? null)} className="text-sm" />
+              <div className="flex gap-2 items-center">
+                <Button size="sm" onClick={submitRagRule}><Plus className="h-4 w-4" /> 룰 + CSV 등록</Button>
+                {ragAdd && <span className="text-xs text-muted-foreground">{ragAdd}</span>}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

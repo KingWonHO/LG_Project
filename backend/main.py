@@ -52,6 +52,35 @@ def _load_comp_parameters(model: str | None) -> dict | None:
     return entry.get("parameters") if entry else None
 
 
+# 룰베이스 이상치: 컴프 파라미터 임계값 → 비교할 데이터 컬럼(canonical). 초과 시 이상.
+# shunt_over_current는 KB 지침상 Imag와 직접 비교 금지 → 제외.
+_PARAM_THRESHOLD_COLUMNS = {
+    "power_over": "Power",
+    "torque_limit_by_model": "Avg_Torque",
+}
+
+
+def _detect_param_anomalies(df, comp_params: dict | None) -> list[dict]:
+    """선택 모델 파라미터 임계값을 실제 컬럼 최댓값과 비교해 초과 항목을 반환한다 (ANA-005 룰베이스 이상치).
+
+    컬럼이 없거나 파라미터가 없으면 조용히 건너뛴다. shunt_over_current는 제외(Imag 직접비교 금지).
+    """
+    if not comp_params:
+        return []
+    found: list[dict] = []
+    for pkey, col in _PARAM_THRESHOLD_COLUMNS.items():
+        limit = comp_params.get(pkey)
+        if limit is None or col not in df.columns:
+            continue
+        try:
+            peak = float(df[col].max())
+        except (ValueError, TypeError):
+            continue
+        if peak > float(limit):
+            found.append({"param": pkey, "column": col, "peak": round(peak, 2), "limit": limit})
+    return found
+
+
 def _load_mtoc_reference() -> str:
     """MtoC 8bit 제어 프로토콜 해석 기준(bit 의미 + 에이전트 지시문)을 LLM 프롬프트용 텍스트로 로드한다.
 
@@ -237,11 +266,17 @@ async def analyze(file: UploadFile = File(...), comp_model: str | None = Form(No
         # ANA-004: baseline 비교 (정상 기준은 DB에서 로드 / 미등록 시 이탈 없음)
         baseline = baseline_analyzer.analyze_baseline(df, _load_baseline_ranges())
 
-        # ANA-006: 종합 판정
-        verdict = verdict_engine.analyze_verdict(trip, baseline)
+        # ANA-005(룰베이스 이상치): 컴프 모델 파라미터 임계값 초과 탐지 → quality.outliers
+        comp_params = _load_comp_parameters(comp_model)
+        param_anomalies = _detect_param_anomalies(df, comp_params)
+        quality = {"missing": 0, "outliers": len(param_anomalies)}
+
+        # ANA-006: 종합 판정 (트립 + baseline 이탈 + 이상치 → PASS/관리필요/FAIL)
+        # 트립이 없어도 이상치(outliers>0)나 baseline 이탈이 있으면 verdict_engine이 관리필요로 판정
+        verdict = verdict_engine.analyze_verdict(trip, baseline, quality)
 
         # ANA-007: 표준 결과 JSON (차트용 series 포함)
-        result = result_builder.build_result(df, DEFAULT_CHART_COLUMNS, verdict, trip, baseline)
+        result = result_builder.build_result(df, DEFAULT_CHART_COLUMNS, verdict, trip, baseline, quality)
 
         # 경로 B: MtoC 컬럼이 있으면 8bit 상태 디코드 (없으면 None)
         mtoc_states = _decode_mtoc_states(df)
@@ -258,12 +293,12 @@ async def analyze(file: UploadFile = File(...), comp_model: str | None = Form(No
         db_result = db_manager.save_analysis_result(
             file_id=db_file.id,
             verdict=result["verdict"],
-            anomalies={"baseline": result["baseline"], "quality": result["quality"]},
+            anomalies={"baseline": result["baseline"], "quality": result["quality"], "param_anomalies": param_anomalies},
             trip_info=result["trip"],
         )
         db_manager.update_file_status(db_file.id, "done")
 
-        return {**result, "filename": file.filename, "file_id": db_file.id, "result_id": db_result.id, "comp_model": comp_model, "mtoc": mtoc_states, "data_type": data_type}
+        return {**result, "filename": file.filename, "file_id": db_file.id, "result_id": db_result.id, "comp_model": comp_model, "mtoc": mtoc_states, "data_type": data_type, "param_anomalies": param_anomalies}
 
     except Exception:
         db_manager.update_file_status(db_file.id, "error")
@@ -500,3 +535,48 @@ def rag_index() -> dict:
     """DB의 Trip Code를 ChromaDB에 재인덱싱 (RAG-001 수동 트리거)."""
     count = rag_engine.index_trip_codes_from_db()
     return {"indexed": count}
+
+
+@app.post("/api/rag/engineer")
+async def add_engineer_rule(
+    rule_name: str = Form(...),
+    interpretation: str = Form(...),
+    file: UploadFile = File(...),
+    comp_model: str | None = Form(None),
+) -> dict:
+    """엔지니어 RAG 룰 추가: 룰(해석) + 대표 CSV → CSV 분석 시그니처 임베딩으로 engineer_rag 저장.
+
+    이후 유사한 분석이 들어오면(build_rag_context 이중검색) 이 엔지니어 룰이 기존 Trip Code보다 우선 사용된다.
+    """
+    content = await file.read()
+    try:
+        df = column_mapper.map_columns(file_parser.parse_file(file.filename, content))
+    except file_parser.FileParseError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    trip = trip_analyzer.analyze_trip(df) if "Trip_Code" in df.columns else {"count": 0, "ranges": []}
+    baseline = baseline_analyzer.analyze_baseline(df, _load_baseline_ranges())
+    quality = {"missing": 0, "outliers": len(_detect_param_anomalies(df, _load_comp_parameters(comp_model)))}
+    verdict = verdict_engine.analyze_verdict(trip, baseline, quality)
+
+    signature = rag_engine._build_signature({"verdict": verdict["verdict"], "trip": trip, "baseline": baseline})
+    rid = rag_engine.index_engineer_rule(
+        rule_name=rule_name,
+        interpretation=interpretation,
+        signature_text=signature,
+        extra_meta={"filename": file.filename, "verdict": verdict["verdict"], "comp_model": comp_model or ""},
+    )
+    return {
+        "ok": True,
+        "id": rid,
+        "rule_name": rule_name,
+        "signature": signature,
+        "verdict": verdict["verdict"],
+        "count": rag_engine.engineer_rules_count(),
+    }
+
+
+@app.get("/api/rag/engineer")
+def engineer_rules_status() -> dict:
+    """등록된 엔지니어 RAG 룰 수."""
+    return {"count": rag_engine.engineer_rules_count()}
