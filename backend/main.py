@@ -20,6 +20,7 @@ from src import db_manager
 from src import llm_report
 from src import rag_engine
 from src import engineer_rules
+from src import llm_chat
 # ANA-001~007 분석 파이프라인 (src 모듈 호출 전용 — 모듈 자체는 수정하지 않음)
 from src import (
     file_parser,
@@ -158,6 +159,38 @@ def _load_mtoc_rules() -> str:
             f" → 지침: {r.get('llm_instruction', '')}"
         )
     return "\n".join(lines)
+
+
+def _build_llm_context(analysis: dict) -> str:
+    """리포트와 동일한 근거(파라미터/MtoC/규칙/RAG)를 대화(chat)용 컨텍스트 텍스트로 조립한다."""
+    trip = analysis.get("trip") or {}
+    baseline = analysis.get("baseline") or {}
+    out_of_range = baseline.get("out_of_range") or []
+    parts = [
+        f"판정: {analysis.get('verdict', 'UNKNOWN')}",
+        f"Trip 발생: {trip.get('count', 0)}회",
+        f"Baseline 이탈: {', '.join(out_of_range) if out_of_range else '없음'}",
+    ]
+    comp_model = analysis.get("comp_model")
+    comp_params = _load_comp_parameters(comp_model)
+    if comp_params:
+        parts.append(f"컴프 모델({comp_model}) 파라미터: {comp_params}")
+    if analysis.get("param_anomalies"):
+        parts.append(f"임계값 초과 이상: {analysis['param_anomalies']}")
+    mtoc = _load_mtoc_reference()
+    if mtoc:
+        parts.append(mtoc)
+    mrules = _load_mtoc_rules()
+    if mrules:
+        parts.append(mrules)
+    scope = "TRIP" if trip.get("count", 0) > 0 else "NORMAL"
+    erules = engineer_rules.build_rules_context(data_type=analysis.get("data_type"), rule_scope=scope)
+    if erules:
+        parts.append(erules)
+    rag = rag_engine.build_rag_context(analysis)
+    if rag:
+        parts.append(rag)
+    return "\n\n".join(parts)
 
 
 def _load_baseline_ranges() -> dict[str, dict]:
@@ -580,3 +613,36 @@ async def add_engineer_rule(
 def engineer_rules_status() -> dict:
     """등록된 엔지니어 RAG 룰 수."""
     return {"count": rag_engine.engineer_rules_count()}
+
+
+@app.post("/api/chat")
+def chat(body: dict) -> dict:
+    """분석 결과 컨텍스트 기반 로컬 LLM 다중 턴 대화.
+
+    요청: {analysis: <analyze 응답>, messages: [{role, content}, ...]}
+    """
+    analysis = body.get("analysis") or {}
+    messages = body.get("messages") or []
+    context = _build_llm_context(analysis)
+    reply = llm_chat.chat(context, messages)
+    return {"reply": reply, "model": llm_report.get_local_model_name()}
+
+
+@app.post("/api/learn")
+def learn(body: dict) -> dict:
+    """LLM 대화 결과를 학습 DB(engineer_rag)에 반영 → 이후 유사 분석에서 우선 참고.
+
+    요청: {analysis: <analyze 응답>, content: <반영할 내용>, title?: <제목>}
+    """
+    analysis = body.get("analysis") or {}
+    content = (body.get("content") or "").strip()
+    if not content:
+        raise HTTPException(status_code=400, detail="학습 내용이 비어 있습니다.")
+    signature = rag_engine._build_signature(analysis)
+    rid = rag_engine.index_engineer_rule(
+        rule_name=body.get("title") or "대화 학습",
+        interpretation=content,
+        signature_text=signature,
+        extra_meta={"source": "chat", "verdict": analysis.get("verdict", "")},
+    )
+    return {"ok": True, "id": rid, "count": rag_engine.engineer_rules_count()}
