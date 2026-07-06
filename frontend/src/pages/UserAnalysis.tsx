@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea, Legend, Brush,
 } from "recharts";
-import { Upload, Play, FileText, AlertTriangle, CheckCircle2, XCircle, Loader2, Plus, Trash2 } from "lucide-react";
+import { Upload, Play, FileText, AlertTriangle, CheckCircle2, XCircle, Loader2, Plus, Trash2, Send, BookmarkPlus } from "lucide-react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { parseDataFile, LINE_COLORS, expandNarrowTripRanges, type ParsedFile } from "@/lib/parseFile";
 import { canonicalName, isPlottable, type PressureMode } from "@/lib/columnSchema";
-import { api, type CompressorsData } from "@/lib/api";
+import { api, type CompressorsData, type AnalyzeResponse, type ChatMsg } from "@/lib/api";
 import { useApp } from "@/context";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +31,83 @@ function defaultCols(p: ParsedFile, mode: PressureMode): number[] {
   const plot = p.numericIndices.filter((i) => isPlottable(i, mode));
   const pref = [1, 3, 7].filter((i) => plot.includes(i));
   return pref.length ? pref : plot.slice(0, 3);
+}
+
+// 분석 결과 컨텍스트 기반 LLM 대화 + 대화 결과 학습 DB 반영
+function ChatPanel({ analysis }: { analysis: AnalyzeResponse }) {
+  const { ua, setUa } = useApp();
+  const chat = ua.chat;
+  const [input, setInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [learnMsg, setLearnMsg] = useState("");
+
+  const send = async () => {
+    const text = input.trim();
+    if (!text || sending) return;
+    const next: ChatMsg[] = [...chat, { role: "user", content: text }];
+    setUa({ chat: next });
+    setInput("");
+    setSending(true);
+    try {
+      const r = await api.chat(analysis, next);
+      setUa({ chat: [...next, { role: "assistant", content: r.reply }] });
+    } catch (e: any) {
+      setUa({ chat: [...next, { role: "assistant", content: "오류: " + e.message }] });
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const learn = async (content: string) => {
+    setLearnMsg("반영 중…");
+    try {
+      const r = await api.learn(analysis, content);
+      setLearnMsg(`학습 DB 반영 완료 (총 ${r.count}건)`);
+    } catch (e: any) {
+      setLearnMsg("반영 실패: " + e.message);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
+        <CardTitle className="text-base">LLM 대화</CardTitle>
+        {chat.length > 0 && (
+          <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground" onClick={() => setUa({ chat: [] })}>대화 초기화</Button>
+        )}
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+          {chat.length === 0 && (
+            <p className="text-xs text-muted-foreground">분석 결과에 대해 질문하세요. 예) "이 판정의 원인은?", "관리필요 이유 설명", "우선 점검 항목은?"</p>
+          )}
+          {chat.map((m, i) => (
+            <div key={i} className={cn("flex gap-2", m.role === "user" ? "justify-end" : "")}>
+              {m.role === "assistant" && <div className="h-6 w-6 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-[10px] font-medium shrink-0">AI</div>}
+              <div className={cn("rounded-lg px-3 py-2 text-sm max-w-[80%] whitespace-pre-wrap", m.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted/50 border")}>
+                {m.content}
+                {m.role === "assistant" && (
+                  <div className="mt-1">
+                    <Button variant="ghost" size="sm" className="h-6 px-1 text-[11px] text-muted-foreground" onClick={() => learn(m.content)}>
+                      <BookmarkPlus className="h-3 w-3" /> 학습 DB에 반영
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+        {learnMsg && <p className="text-xs text-muted-foreground">{learnMsg}</p>}
+        <div className="flex gap-2">
+          <Input value={input} onChange={(e) => setInput(e.target.value)}
+                 onKeyDown={(e) => e.key === "Enter" && send()} placeholder="질문 입력…" disabled={sending} />
+          <Button onClick={send} disabled={sending || !input.trim()}>
+            {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 type GraphCardProps = {
@@ -171,7 +248,7 @@ export default function UserAnalysis() {
 
   const onPick = async (f: File | null) => {
     setErr(null);
-    setUa({ file: f, parsed: null, result: null, graphs: [[]] });
+    setUa({ file: f, parsed: null, result: null, graphs: [[]], chat: [] });
     if (!f) return;
     setParsing(true);
     try {
@@ -200,7 +277,7 @@ export default function UserAnalysis() {
     setRunning(true); setErr(null);
     try {
       const res = await api.analyze(file, compModel || undefined);
-      setUa({ result: res });
+      setUa({ result: res, chat: [] });
       setLastResult(res);
       await refreshHistory();
     } catch (e: any) {
@@ -280,6 +357,7 @@ export default function UserAnalysis() {
           </Card>
         )}
 
+        {/* 분석 결과 */}
         <Card>
           <CardHeader className="flex-row items-center justify-between space-y-0">
             <CardTitle className="text-base">분석 결과</CardTitle>
@@ -329,6 +407,10 @@ export default function UserAnalysis() {
           </CardContent>
         </Card>
 
+        {/* LLM 대화 (분석 실행 후) */}
+        {result && <ChatPanel analysis={result} />}
+
+        {/* 그래프 */}
         <div className="flex items-center justify-between">
           <h3 className="text-sm font-medium">그래프</h3>
           <Button variant="outline" size="sm" onClick={addGraph} disabled={!parsed}>

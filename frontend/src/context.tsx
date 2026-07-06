@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, type HistoryItem, type AnalyzeResponse, type ReportData } from "@/lib/api";
+import { api, type HistoryItem, type AnalyzeResponse, type ReportData, type ChatMsg } from "@/lib/api";
 import type { ParsedFile } from "@/lib/parseFile";
 import type { PressureMode } from "@/lib/columnSchema";
 
@@ -11,6 +11,7 @@ export type UAState = {
   mode: PressureMode;       // 평압(NODPS) / 차압(DPS)
   compModel: string;        // 선택한 컴프 모델 (Comp_Parameter.json)
   graphs: number[][];       // 그래프별 선택 컬럼 인덱스 목록
+  chat: ChatMsg[];          // LLM 대화 히스토리
   result: AnalyzeResponse | null;
 };
 
@@ -30,7 +31,7 @@ type Ctx = {
   setReportData: (r: ReportData | null) => void;
 };
 
-const EMPTY_UA: UAState = { file: null, parsed: null, mode: "평압", compModel: "", graphs: [[]], result: null };
+const EMPTY_UA: UAState = { file: null, parsed: null, mode: "평압", compModel: "", graphs: [[]], chat: [], result: null };
 
 const AppContext = createContext<Ctx>({
   role: "user",

@@ -54,6 +54,7 @@ export type Baseline = {
 
 export type PromptData = { version: string | null; text: string };
 export type ReportData = { summary: string; model?: string; rag_context?: string };
+export type ChatMsg = { role: "user" | "assistant"; content: string };
 
 const jsonHeaders = { "Content-Type": "application/json" };
 
@@ -106,4 +107,14 @@ export const api = {
 
   report: (analysis: unknown) =>
     fetch(`${BASE}/report`, { method: "POST", headers: jsonHeaders, body: JSON.stringify(analysis) }).then(j<ReportData>),
+
+  chat: (analysis: unknown, messages: ChatMsg[]) =>
+    fetch(`${BASE}/chat`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ analysis, messages }) }).then(
+      j<{ reply: string; model: string }>
+    ),
+
+  learn: (analysis: unknown, content: string, title?: string) =>
+    fetch(`${BASE}/learn`, { method: "POST", headers: jsonHeaders, body: JSON.stringify({ analysis, content, title }) }).then(
+      j<{ ok: boolean; count: number }>
+    ),
 };
