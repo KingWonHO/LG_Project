@@ -7,7 +7,8 @@
 
 ## 요약
 
-최종 판정: 이번 Trip 검증 결과, Compressor는 PASS 판정을 받았습니다. Trip 발생 횟수는 0건이며, 주요 이상 항목으로는 FO Signal, COMMUNICATION_LOSS_MAIN_COMP, SENSING_ERROR_CURRENT_OFFSET, POWER_OVERLOAD, SENSORLESS_ANGLE_DEVIATION 등이 확인되었으나, 각각의 경우에 대해 HW영향 여부, 제어 품질 불량 가능성 등을 확인해야 할 필요가 있습니다. 특히, FO Signal Trip은 과부하 또는 고토크 운전 상태에서 발생할 수 있으며, COMMUNICATION_LOSS_MAIN_COMP Trip은 HW적인 이상이나 Main Micom의 SW 비정상 가능성을 의심해 볼 수 있습니다. SENSING_ERROR_CURRENT_OFFSET Trip은 컴프 ON 신호 수신 후 20초 이상 안정 운전 시 노이즈 또는 하드웨어 에러에 의한 비정상동작일 가능성이 있고, POWER_OVERLOAD Trip은 Compressor 출력 Power가 기준 이상으로 지속될 때 발생할 수 있습니다. SENSORLESS_ANGLE_DEVIATION Trip의 경우, Rotor 고정 여부 또는 자가진단 파라미터 이상 가능성을 고려해야 합니다. 따라서, 트립 발생 시간을 확인하고 컴프 점검을 통해 문제의 근본 원인을 파악하는 것이 우선입니다.
+최종 판정: 이번 Trip 검증 결과, Compressor는 PASS 판정을 받았습니다. Trip 발생 횟수는 0건이며, 주요 이상 항목으로는 FO Signal, COMMUNICATION_LOSS_MAIN_COMP, SENSING_ERROR_CURRENT_OFFSET, POWER_OVERLOAD, SENSORLESS_ANGLE_DEVIATION 등이 확인되었으나, 각각의 경우에 대해 HW영향 여부, 제어 품질 불량 가능성 등을 확인해야 할 필요가 있습니다. 특히, FO Signal Trip은 과부하 또는 고토크 운전 상태에서 발생할 수 있으며, COMMUNICATION_LOSS_MAIN_COMP Trip은 HW적인 이상이나 Main Micom의 SW 비정상 가능성을 의심해 볼 수 있습니다.
+SENSING_ERROR_CURRENT_OFFSET Trip은 컴프 ON 신호 수신 후 20초 이상 안정 운전 시 노이즈 또는 하드웨어 에러에 의한 비정상동작일 가능성이 있고, POWER_OVERLOAD Trip은 Compressor 출력 Power가 기준 이상으로 지속될 때 발생할 수 있습니다. SENSORLESS_ANGLE_DEVIATION Trip의 경우, Rotor 고정 여부 또는 자가진단 파라미터 이상 가능성을 고려해야 합니다. 따라서, 트립 발생 시간을 확인하고 컴프 점검을 통해 문제의 근본 원인을 파악하는 것이 우선입니다.
 
 ## RAG 참고 자료
 

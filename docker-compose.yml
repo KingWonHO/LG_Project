@@ -1,25 +1,55 @@
 # ============================================================
-# LG_Project 배포 구성
-#   backend  : FastAPI (분석/판정/RAG/리포트)
-#   frontend : React 빌드 → nginx
-#   qwen     : Ollama LLM 데몬 (gemma3/qwen 등)
+# LG_Project 통합 배포 (docker compose)
+#   ollama       : 로컬 LLM 데몬 (gemma3:4b)
+#   ollama-init  : 최초 1회 모델 pull 후 종료
+#   backend      : FastAPI (분석/판정/RAG/LLM 대화/리포트)
+#   frontend     : React 빌드 → nginx (/api 를 backend로 프록시)
 # 실행: docker compose up -d --build
+#   - 프론트:  http://localhost:8080
+#   - API:     http://localhost:8000/docs
 # ============================================================
 services:
+  ollama:
+    image: ollama/ollama:latest
+    container_name: lgproject-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    restart: unless-stopped
+    # GPU 사용 시 주석 해제 (NVIDIA Container Toolkit 필요)
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  # 최초 1회 gemma3:4b 다운로드 후 종료 (compose up 시 자동)
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: lgproject-ollama-init
+    depends_on:
+      - ollama
+    environment:
+      - OLLAMA_HOST=http://ollama:11434
+    entrypoint: ["sh", "-c", "sleep 5 && ollama pull gemma3:4b"]
+    restart: "no"
+
   backend:
     build: ./backend
     container_name: lgproject-backend
     ports:
       - "8000:8000"
-    env_file:
-      - ./backend/.env
     environment:
-      - OLLAMA_HOST=http://qwen:11434
+      - OLLAMA_HOST=http://ollama:11434
       - LOCAL_LLM_MODEL=gemma3:4b
     volumes:
+      # 참조데이터(agentData/trip_case.json) + 산출물(app.db/chroma/uploads) 모두 호스트에 영속
       - ./backend/data:/app/data
     depends_on:
-      - qwen
+      - ollama
     restart: unless-stopped
 
   frontend:
@@ -31,33 +61,5 @@ services:
       - backend
     restart: unless-stopped
 
-  qwen:
-    image: ollama/ollama:latest
-    container_name: lgproject-qwen
-    ports:
-      - "11434:11434"
-    volumes:
-      - qwen_models:/root/.ollama
-    restart: unless-stopped
-    # GPU 사용 시 주석 해제 (NVIDIA Container Toolkit 필요)
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
-
-  # PostgreSQL 전환 시 주석 해제 + backend/.env의 DB_URL 변경
-  # db:
-  #   image: postgres:16
-  #   environment:
-  #     POSTGRES_USER: lguser
-  #     POSTGRES_PASSWORD: change-me
-  #     POSTGRES_DB: lgproject
-  #   volumes:
-  #     - pg_data:/var/lib/postgresql/data
-
 volumes:
-  qwen_models:
-  # pg_data:
+  ollama_models:

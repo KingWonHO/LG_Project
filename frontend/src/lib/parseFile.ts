@@ -82,6 +82,22 @@ export async function parseDataFile(file: File): Promise<ParsedFile> {
   return { columnCount, numericIndices, rawNames, rowCount: dataRows.length, series, tripRanges, tripCount: tripRanges.length, tripCodes };
 }
 
+/**
+ * xlsx/xls를 클라이언트(SheetJS)에서 CSV로 변환한 File을 반환한다.
+ * 백엔드가 느린 openpyxl 대신 빠른 read_csv를 쓰도록, 업로드 전에 변환한다.
+ * 이미 CSV면 원본을 그대로 반환.
+ */
+export async function toCsvFile(file: File): Promise<File> {
+  const name = file.name.toLowerCase();
+  if (!name.endsWith(".xlsx") && !name.endsWith(".xls")) return file;
+  const buf = await file.arrayBuffer();
+  const wb = XLSX.read(buf, { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  const csv = XLSX.utils.sheet_to_csv(ws);
+  const base = file.name.replace(/\.(xlsx|xls)$/i, "");
+  return new File([csv], `${base}.csv`, { type: "text/csv" });
+}
+
 export const LINE_COLORS = ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#14b8a6"];
 
 /**

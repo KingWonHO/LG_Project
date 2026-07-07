@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { parseDataFile, LINE_COLORS, expandNarrowTripRanges, type ParsedFile } from "@/lib/parseFile";
+import { parseDataFile, toCsvFile, LINE_COLORS, expandNarrowTripRanges, type ParsedFile } from "@/lib/parseFile";
 import { canonicalName, isPlottable, isNoise, type PressureMode } from "@/lib/columnSchema";
 import { api, type CompressorsData, type AnalyzeResponse, type ChatMsg } from "@/lib/api";
 import { useApp } from "@/context";
@@ -155,10 +155,11 @@ function GraphCard({ parsed, mode, tripRanges, cols, selectable, index, canRemov
   // 노이즈 전처리: 정상범위(엔지니어 스펙)를 벗어난 값을 그래프에서 제거(null)
   const [cleanNoise, setCleanNoise] = useState(true);
   const chartData = useMemo<Record<string, number | null>[]>(() => {
-    if (!cleanNoise || drawn.length === 0) return parsed.series;
+    const dr = cols.filter((i) => isPlottable(i, mode) && parsed.numericIndices.includes(i));
+    if (!cleanNoise || dr.length === 0) return parsed.series;
     return parsed.series.map((row) => {
       let out: Record<string, number | null> = row;
-      for (const idx of drawn) {
+      for (const idx of dr) {
         const v = row[String(idx)];
         if (typeof v === "number" && isNoise(idx, mode, v)) {
           out = out === row ? { ...row } : out;
@@ -167,7 +168,7 @@ function GraphCard({ parsed, mode, tripRanges, cols, selectable, index, canRemov
       }
       return out;
     });
-  }, [parsed.series, drawn, mode, cleanNoise]);
+  }, [parsed.series, parsed.numericIndices, cols, mode, cleanNoise]);
 
   return (
     <Card>
@@ -225,7 +226,8 @@ function GraphCard({ parsed, mode, tripRanges, cols, selectable, index, canRemov
               <Brush dataKey="time" height={18} stroke="#94a3b8" travellerWidth={8}
                      startIndex={range[0]} endIndex={range[1]}
                      onChange={(r: any) => {
-                       if (r && typeof r.startIndex === "number" && typeof r.endIndex === "number") setRange([r.startIndex, r.endIndex]);
+                       if (!r || typeof r.startIndex !== "number" || typeof r.endIndex !== "number") return;
+                       setRange((prev) => (prev[0] === r.startIndex && prev[1] === r.endIndex ? prev : [r.startIndex, r.endIndex]));
                      }}
                      tickFormatter={(t) => String(t)} />
             </LineChart>
@@ -297,7 +299,9 @@ export default function UserAnalysis() {
     if (!file) { setErr("CSV/XLSX 파일을 먼저 선택하세요."); return; }
     setRunning(true); setErr(null);
     try {
-      const res = await api.analyze(file, compModel || undefined);
+      // xlsx/xls는 클라이언트에서 CSV로 변환해 전송 → 백엔드가 빠른 read_csv 사용
+      const uploadFile = await toCsvFile(file);
+      const res = await api.analyze(uploadFile, compModel || undefined);
       setUa({ result: res, chat: [] });
       setLastResult(res);
       await refreshHistory();
