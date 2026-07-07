@@ -21,6 +21,7 @@ from src import llm_report
 from src import rag_engine
 from src import engineer_rules
 from src import llm_chat
+from src import noise_filter
 # ANA-001~007 분석 파이프라인 (src 모듈 호출 전용 — 모듈 자체는 수정하지 않음)
 from src import (
     file_parser,
@@ -281,6 +282,16 @@ async def analyze(file: UploadFile = File(...), comp_model: str | None = Form(No
     except file_parser.FileParseError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
+    # data_type 추론(DPS=Trial_Count / NODPS=Wait_Time) + 노이즈 전처리
+    # 정상범위 초과 값은 수집오류(튀는 값)이므로 분석 전에 제거해 판정 왜곡을 막는다.
+    if "Trial_Count" in df.columns:
+        data_type = "DPS"
+    elif "Wait_Time" in df.columns:
+        data_type = "NODPS"
+    else:
+        data_type = None
+    df = noise_filter.clean_noise(df, data_type)
+
     # DB-001: 파일 정보 저장 (행 수 = 파싱된 실제 행 수)
     db_file = db_manager.save_file_info(
         filename=file.filename,
@@ -313,14 +324,6 @@ async def analyze(file: UploadFile = File(...), comp_model: str | None = Form(No
 
         # 경로 B: MtoC 컬럼이 있으면 8bit 상태 디코드 (없으면 None)
         mtoc_states = _decode_mtoc_states(df)
-
-        # data_type 추론 (엔지니어 룰 필터용): DPS=Trial_Count / NODPS=Wait_Time 컬럼으로 판별
-        if "Trial_Count" in df.columns:
-            data_type = "DPS"
-        elif "Wait_Time" in df.columns:
-            data_type = "NODPS"
-        else:
-            data_type = None
 
         # DB-002: 분석 결과 저장
         db_result = db_manager.save_analysis_result(
