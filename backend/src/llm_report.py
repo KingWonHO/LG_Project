@@ -48,6 +48,18 @@ __ANALYSIS_JSON__
 [RAG 검색 근거]
 __RAG_RESULTS__
 
+[실측 데이터 (백엔드가 DATA_REQUEST에 답한 실제 수치. 있으면 이 값만 사용)]
+__FETCHED__
+
+■ 실제 수치가 필요하면(예: 특정 시점의 MtoC/Power/Real_Hz 값) 답변을 쓰지 말고, 먼저 아래 한 줄만 출력한다:
+DATA_REQUEST: [15@<초>, 7@<초>]
+   - 컬럼은 룰 태그 [번호|이름]의 번호를 쓴다 (예: [15|MtoC]→15, [7|Power]→7, [5|Real_Hz]→5, [20|Trip]→20).
+   - 시점(초)은 반드시 trip_events의 실제 start/end 값을 쓴다. [실측 데이터]에 값이 이미 있으면 그 값만 쓰고 DATA_REQUEST를 다시 내지 않는다.
+
+■ 엔지니어 분석 규칙의 조건/코드/수치(예: "Trip=6 or 7 or 5", "MtoC=홀수로 변경")는 판단 기준일 뿐이다.
+   그 문장을 그대로 옮기지 말고, trip_events의 실제 발생 코드/시간과 [실측 데이터]의 실제 수치로만 서술한다.
+   룰에 나열된 후보 코드/조건을 그대로 나열하지 마라.
+
 너는 반드시 아래 4개 섹션만, 아래 순서로 작성한다. 섹션 이름을 바꾸거나 추가하지 마라.
 
 ## 결과
@@ -92,12 +104,17 @@ __RAG_RESULTS__
 10. IPM 온도는 PCB별 정확도 차이가 있어 절대값 단정 대신 경향성으로 설명한다.
 11. 엔지니어가 바로 읽도록 짧고 명확하게. 장황한 배경 설명은 생략한다.
 12. 시점/구간/Trip 코드는 분석 JSON의 trip_events·trip_ranges에 있는 실제 Time 값만 사용하고 지어내지 않는다. trip_events가 비어 있으면 분석·조치에서 시점을 언급하지 않는다.
+13. 엔지니어 룰의 조건문/후보 코드/기호 조건(MtoC=홀수 등)을 그대로 복사하지 않는다. 실제 발생 코드(trip_events)와 [실측 데이터]의 실제 수치로 바꿔 쓴다.
+14. MtoC 등 특정 시점의 실제 값이 필요하면 DATA_REQUEST로 요청해 받은 [실측 데이터] 값만 사용한다. 값이 없으면 그 수치를 단정하지 않는다.
 
 이제 위 형식대로만 답변한다.
 """
+    fetched = analysis_json.get("fetched_values") if isinstance(analysis_json, dict) else None
+    fetched_text = str(fetched) if fetched else "(아직 없음 — 필요하면 DATA_REQUEST로 요청)"
     return (
         prompt.replace("__ANALYSIS_JSON__", str(analysis_json))
         .replace("__RAG_RESULTS__", str(rag_results))
+        .replace("__FETCHED__", fetched_text)
         .strip()
     )
 
@@ -223,47 +240,84 @@ def generate_rule_based_summary(
     )
 
 
+def _call_llm(prompt: str, model: str) -> str:
+    """단일 LLM 호출 → content 문자열 반환."""
+    response = ollama.chat(
+        model=model,
+        messages=[
+            {
+                "role": "system",
+                "content": (
+                    "너는 Compressor 제어검증 분석 결과를 한국어로 요약하는 전문 AI Agent이다. "
+                    "반드시 '## 결과', '## 판정', '## 분석', '## 조치' 네 섹션만 출력하라. "
+                    "판정에는 발생 여부와 횟수만 쓰고, 원인은 분석에, 조치는 조치 섹션에만 작성하라. "
+                    "엔지니어 룰의 조건/후보 코드를 그대로 복사하지 말고 실제 발생값(trip_events)과 실측 데이터만 사용하라. "
+                    "필요한 실제 수치가 있으면 'DATA_REQUEST: [지표@초]' 한 줄만 먼저 출력하라."
+                ),
+            },
+            {"role": "user", "content": prompt},
+        ],
+        options={"temperature": 0.1, "num_predict": 512},
+    )
+    return (response["message"]["content"] or "").strip()
+
+
+def _parse_data_request(content: str) -> list[str]:
+    """LLM 출력에서 'DATA_REQUEST: [MtoC@6118, Power@6118]' 를 파싱해 ['MtoC@6118', ...] 반환."""
+    m = re.search(r"DATA_REQUEST\s*:\s*\[?([^\]\n]+)\]?", content, re.IGNORECASE)
+    if not m:
+        return []
+    items = [x.strip() for x in m.group(1).split(",") if "@" in x]
+    return items[:12]
+
+
+def _strip_data_request(content: str) -> str:
+    """최종 출력에서 DATA_REQUEST 줄을 제거한다."""
+    return "\n".join(
+        ln for ln in content.splitlines() if not ln.strip().upper().startswith("DATA_REQUEST")
+    ).strip()
+
+
 def generate_llm_summary(
     analysis_json: dict[str, Any],
     rag_results: list[str] | None = None,
     model_name: str | None = None,
+    data_fetcher=None,
 ) -> str:
-    """Ollama 로컬 LLM 기반 분석 요약 생성 (결과/판정/분석/조치 4섹션)."""
+    """Ollama 로컬 LLM 기반 요약 (결과/판정/분석/조치 4섹션).
+
+    data_fetcher: LLM이 DATA_REQUEST로 실제 수치를 요청하면, 그 목록(list[str])을 받아
+    실측값(dict)을 돌려주는 콜백(main.py가 df 접근해 제공). None이면 요청 기능 비활성.
+    """
     rag_results = rag_results or []
-    # main.py는 rag_results를 따로 넘기지 않고 analysis_json 안에 rag_context로 넣는다 → 프롬프트 근거로 승격
     if not rag_results and isinstance(analysis_json, dict):
         rc = analysis_json.get("rag_context")
         if rc:
             rag_results = [rc] if isinstance(rc, str) else list(rc)
 
     model = get_local_model_name(model_name)
-    prompt = build_summary_prompt(analysis_json, rag_results)
-
     try:
-        response = ollama.chat(
-            model=model,
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "너는 Compressor 제어검증 분석 결과를 한국어로 요약하는 전문 AI Agent이다. "
-                        "반드시 '## 결과', '## 판정', '## 분석', '## 조치' 네 섹션만 출력하라. "
-                        "판정에는 발생 여부와 횟수만 쓰고, 원인은 분석에, 조치는 조치 섹션에만 작성하라. "
-                        "RAG에 없는 내용을 지어내지 마라."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            options={"temperature": 0.1, "num_predict": 512},
-        )
+        # 1차: 답변 또는 DATA_REQUEST
+        content = _call_llm(build_summary_prompt(analysis_json, rag_results), model)
 
-        content = response["message"]["content"].strip()
+        # LLM이 실제 수치를 요청했고 콜백이 있으면 → 백엔드에서 받아 2차 생성
+        reqs = _parse_data_request(content)
+        if reqs and data_fetcher is not None:
+            try:
+                fetched = data_fetcher(reqs)
+            except Exception:
+                fetched = {}
+            if fetched:
+                aj2 = {**analysis_json, "fetched_values": fetched}
+                content = _call_llm(build_summary_prompt(aj2, rag_results), model)
+
+        content = _strip_data_request(content)
         if not content:
-            fallback = generate_rule_based_summary(analysis_json, rag_results)
-            return f"[로컬 LLM 응답이 비어 있어 rule-based 요약을 반환합니다]\n사용 모델: {model}\n\n{fallback}"
+            fb = generate_rule_based_summary(analysis_json, rag_results)
+            return f"[로컬 LLM 응답이 비어 있어 rule-based 요약을 반환합니다]\n사용 모델: {model}\n\n{fb}"
 
         return normalize_summary_format(content, analysis_json, rag_results)
 
     except Exception as exc:
-        fallback = generate_rule_based_summary(analysis_json, rag_results)
-        return f"[로컬 LLM 호출 실패로 rule-based 요약을 반환합니다]\n사용 모델: {model}\n오류 내용: {exc}\n\n{fallback}"
+        fb = generate_rule_based_summary(analysis_json, rag_results)
+        return f"[로컬 LLM 호출 실패로 rule-based 요약을 반환합니다]\n사용 모델: {model}\n오류 내용: {exc}\n\n{fb}"
