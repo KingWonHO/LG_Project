@@ -11,6 +11,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pandas as pd
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -258,6 +260,26 @@ def compressors() -> dict:
 # ---------------------------------------------------------------------------
 # 분석 (USR / ANA)
 # ---------------------------------------------------------------------------
+def _trip_events(df: "pd.DataFrame", trip: dict) -> list[dict]:
+    """각 트립 구간의 [시작 Time, 종료 Time]과 그 구간에 실제 나타난 Trip_Code 목록을 만든다.
+    LLM이 구간/시점을 지어내지 않고 실제 Time·코드만 근거로 쓰도록 넘기는 데이터."""
+    events: list[dict] = []
+    try:
+        if "Trip_Code" not in df.columns or "Time" not in df.columns:
+            return events
+        for rng in (trip.get("ranges") or []):
+            if not rng or len(rng) < 2:
+                continue
+            start, end = rng[0], rng[1]
+            seg = df[(df["Time"] >= start) & (df["Time"] <= end)]
+            codes_num = pd.to_numeric(seg["Trip_Code"], errors="coerce").dropna()
+            codes = sorted({int(c) for c in codes_num.tolist() if c != 0})
+            events.append({"start": start, "end": end, "codes": codes})
+    except Exception:
+        pass
+    return events
+
+
 @app.post("/api/analyze")
 async def analyze(file: UploadFile = File(...), comp_model: str | None = Form(None)) -> dict:
     """파일 업로드 → 분석 (ANA-001~007).
@@ -317,6 +339,7 @@ async def analyze(file: UploadFile = File(...), comp_model: str | None = Form(No
             trip = trip_analyzer.analyze_trip(df)
         else:
             trip = {"count": 0, "ranges": []}
+        trip_events = _trip_events(df, trip)
 
         # ANA-004: baseline 비교 (정상 기준은 DB에서 로드 / 미등록 시 이탈 없음)
         baseline = baseline_analyzer.analyze_baseline(df, _load_baseline_ranges())
@@ -345,7 +368,7 @@ async def analyze(file: UploadFile = File(...), comp_model: str | None = Form(No
         )
         db_manager.update_file_status(db_file.id, "done")
 
-        return {**result, "filename": file.filename, "file_id": db_file.id, "result_id": db_result.id, "comp_model": comp_model, "mtoc": mtoc_states, "data_type": data_type, "param_anomalies": param_anomalies}
+        return {**result, "filename": file.filename, "file_id": db_file.id, "result_id": db_result.id, "comp_model": comp_model, "mtoc": mtoc_states, "data_type": data_type, "param_anomalies": param_anomalies, "trip_events": trip_events}
 
     except Exception:
         db_manager.update_file_status(db_file.id, "error")
@@ -554,6 +577,8 @@ def report(analysis: dict) -> dict:
     llm_input = {
         "final_judgement": analysis.get("verdict", "UNKNOWN"),
         "trip_count": trip.get("count", 0),
+        "trip_ranges": trip.get("ranges", []),
+        "trip_events": analysis.get("trip_events", []),
         "abnormal_items": out_of_range,
         "baseline_deviation": [
             {"column": c, "description": "정상 baseline 이탈"} for c in out_of_range
