@@ -13,7 +13,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { parseDataFile, LINE_COLORS, expandNarrowTripRanges, type ParsedFile } from "@/lib/parseFile";
 import { canonicalName, isPlottable, isNoise, type PressureMode } from "@/lib/columnSchema";
 import { api, type CompressorsData, type AnalyzeResponse, type ChatMsg } from "@/lib/api";
-import { useApp } from "@/context";
+import { useApp, useRole } from "@/context";
 import { cn } from "@/lib/utils";
 
 function VerdictBadge({ verdict }: { verdict: string | null }) {
@@ -240,6 +240,7 @@ function GraphCard({ parsed, mode, tripRanges, cols, selectable, index, canRemov
 
 export default function UserAnalysis() {
   const { ua, setUa, refreshHistory, setLastResult } = useApp();
+  const { role } = useRole();
   const { file, parsed, mode, compModel, graphs, result } = ua;
   const navigate = useNavigate();
 
@@ -266,6 +267,8 @@ export default function UserAnalysis() {
   const verdict = result?.verdict ?? null;
   // Trip 수/구간은 백엔드 판정(result) 우선, 실행 전에는 프론트 파싱값(예상)
   const tripCountShown = result ? result.trip.count : (parsed?.tripCount ?? 0);
+  // 실제 트립 케이스(trip_case)에 등록된 코드만 유효 트립으로 표시, 나머지는 정상으로 간주
+  const validTripCodes = parsed ? parsed.tripCodes.filter((c) => tripNames[c] != null) : [];
   const tripRangesShown: [number, number][] = result
     ? (result.trip.ranges as [number, number][])
     : (parsed?.tripRanges ?? []);
@@ -321,7 +324,7 @@ export default function UserAnalysis() {
       <div className="flex items-center justify-between gap-4">
         <TabsList>
           <TabsTrigger value="analysis">분석</TabsTrigger>
-          <TabsTrigger value="learning">학습</TabsTrigger>
+          {role === "engineer" && <TabsTrigger value="learning">학습</TabsTrigger>}
         </TabsList>
         <div className="flex items-center gap-3">
           <Select value={compModel || undefined} onValueChange={(v) => setUa({ compModel: v })}>
@@ -406,9 +409,9 @@ export default function UserAnalysis() {
                   {parsed && (
                     <p className="text-xs leading-relaxed">
                       <span className="text-muted-foreground">발생 Trip Code: </span>
-                      {parsed.tripCodes.length === 0
+                      {validTripCodes.length === 0
                         ? "없음"
-                        : parsed.tripCodes.map((c) => (tripNames[c] ? `${c} · ${tripNames[c]}` : `${c}`)).join(",  ")}
+                        : validTripCodes.map((c) => `${c} · ${tripNames[c]}`).join(",  ")}
                     </p>
                   )}
                   {tripRangesShown.length > 0 && (
@@ -437,7 +440,6 @@ export default function UserAnalysis() {
         </Card>
 
         {/* LLM 대화 (분석 실행 후) */}
-        {result && <ChatPanel analysis={result} />}
 
         {/* 그래프 */}
         <div className="flex items-center justify-between">
@@ -476,9 +478,13 @@ export default function UserAnalysis() {
       </TabsContent>
 
       <TabsContent value="learning" className="mt-3">
-        <Card><CardContent className="pt-6 text-sm text-muted-foreground">
-          학습 기능은 추후 제공 예정입니다. (정상 baseline 학습/갱신)
-        </CardContent></Card>
+        {result ? (
+          <ChatPanel analysis={result} />
+        ) : (
+          <Card><CardContent className="pt-6 text-sm text-muted-foreground">
+            LLM 대화를 하려면 먼저 [분석] 탭에서 파일을 선택하고 실행하세요.
+          </CardContent></Card>
+        )}
       </TabsContent>
     </Tabs>
   );
