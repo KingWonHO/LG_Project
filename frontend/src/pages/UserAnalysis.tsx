@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea, Legend, Brush,
@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { parseDataFile, LINE_COLORS, expandNarrowTripRanges, type ParsedFile } from "@/lib/parseFile";
-import { canonicalName, isPlottable, type PressureMode } from "@/lib/columnSchema";
+import { canonicalName, isPlottable, isNoise, type PressureMode } from "@/lib/columnSchema";
 import { api, type CompressorsData, type AnalyzeResponse, type ChatMsg } from "@/lib/api";
 import { useApp } from "@/context";
 import { cn } from "@/lib/utils";
@@ -152,6 +152,23 @@ function GraphCard({ parsed, mode, tripRanges, cols, selectable, index, canRemov
   };
   const resetRange = () => setRange([0, Math.max(0, len - 1)]);
 
+  // 노이즈 전처리: 정상범위(엔지니어 스펙)를 벗어난 값을 그래프에서 제거(null)
+  const [cleanNoise, setCleanNoise] = useState(true);
+  const chartData = useMemo<Record<string, number | null>[]>(() => {
+    if (!cleanNoise || drawn.length === 0) return parsed.series;
+    return parsed.series.map((row) => {
+      let out: Record<string, number | null> = row;
+      for (const idx of drawn) {
+        const v = row[String(idx)];
+        if (typeof v === "number" && isNoise(idx, mode, v)) {
+          out = out === row ? { ...row } : out;
+          out[String(idx)] = null;
+        }
+      }
+      return out;
+    });
+  }, [parsed.series, drawn, mode, cleanNoise]);
+
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-2">
@@ -184,11 +201,15 @@ function GraphCard({ parsed, mode, tripRanges, cols, selectable, index, canRemov
           <Button size="sm" variant="ghost" className="h-7" onClick={resetRange}>리셋</Button>
           <span className="text-muted-foreground shrink-0 ml-2">Y축 최대</span>
           <Input type="number" value={yMax} onChange={(e) => setYMax(e.target.value)} placeholder="auto" className="h-7 w-24" />
+          <Button size="sm" variant={cleanNoise ? "secondary" : "ghost"} className="h-7 ml-2"
+                  onClick={() => setCleanNoise((v) => !v)} title="정상범위 초과 값을 노이즈로 보고 제거">
+            노이즈 제거 {cleanNoise ? "ON" : "OFF"}
+          </Button>
         </div>
 
         <div className="h-[300px]">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={parsed.series} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
+            <LineChart data={chartData} margin={{ top: 8, right: 8, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
               <XAxis dataKey="time" type="number" domain={["dataMin", "dataMax"]} tick={{ fontSize: 11 }} />
               <YAxis tick={{ fontSize: 11 }} domain={[0, yMaxNum ?? "auto"]} allowDataOverflow={yMaxNum !== null} />
