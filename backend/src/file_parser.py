@@ -46,17 +46,27 @@ def parse_csv(content: bytes) -> pd.DataFrame:
     raise FileParseError("CSV 인코딩을 인식할 수 없습니다 (utf-8-sig, cp949 시도 실패).")
 
 
+def _excel_engine() -> str:
+    """xlsx 파싱 엔진 선택: python-calamine(수십배 빠름) 있으면 사용, 없으면 openpyxl."""
+    try:
+        import python_calamine  # noqa: F401
+        return "calamine"
+    except Exception:
+        return "openpyxl"
+
+
 def parse_excel(content: bytes) -> pd.DataFrame:
     """XLSX 바이트 데이터를 DataFrame으로 변환한다 (첫 번째 시트 사용).
 
     1행이 실제 헤더가 아니라 단순 정수 인덱스 나열(0, 1, 2, 3...)이면 2행을 헤더로 사용한다.
     """
+    engine = _excel_engine()
     try:
         buffer = BytesIO(content)
-        first_row = pd.read_excel(buffer, sheet_name=0, header=None, nrows=1, engine="openpyxl")
+        first_row = pd.read_excel(buffer, sheet_name=0, header=None, nrows=1, engine=engine)
         header_row = 1 if _is_sequential_index_row(first_row.iloc[0].tolist()) else 0
         buffer.seek(0)
-        return pd.read_excel(buffer, sheet_name=0, header=header_row, engine="openpyxl")
+        return pd.read_excel(buffer, sheet_name=0, header=header_row, engine=engine)
     except Exception as exc:
         raise FileParseError(f"XLSX 파싱 실패: {exc}") from exc
 

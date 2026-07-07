@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
-import { parseDataFile, toCsvFile, LINE_COLORS, expandNarrowTripRanges, type ParsedFile } from "@/lib/parseFile";
+import { parseDataFile, LINE_COLORS, expandNarrowTripRanges, type ParsedFile } from "@/lib/parseFile";
 import { canonicalName, isPlottable, isNoise, type PressureMode } from "@/lib/columnSchema";
 import { api, type CompressorsData, type AnalyzeResponse, type ChatMsg } from "@/lib/api";
 import { useApp } from "@/context";
@@ -264,6 +264,11 @@ export default function UserAnalysis() {
   const compParams = compModel ? compData.compressors[compModel]?.parameters : undefined;
 
   const verdict = result?.verdict ?? null;
+  // Trip 수/구간은 백엔드 판정(result) 우선, 실행 전에는 프론트 파싱값(예상)
+  const tripCountShown = result ? result.trip.count : (parsed?.tripCount ?? 0);
+  const tripRangesShown: [number, number][] = result
+    ? (result.trip.ranges as [number, number][])
+    : (parsed?.tripRanges ?? []);
   const tripRanges = parsed
     ? expandNarrowTripRanges(parsed.tripRanges, parsed.series[0]?.time ?? 0, parsed.series[parsed.series.length - 1]?.time ?? 0)
     : [];
@@ -299,9 +304,8 @@ export default function UserAnalysis() {
     if (!file) { setErr("CSV/XLSX 파일을 먼저 선택하세요."); return; }
     setRunning(true); setErr(null);
     try {
-      // xlsx/xls는 클라이언트에서 CSV로 변환해 전송 → 백엔드가 빠른 read_csv 사용
-      const uploadFile = await toCsvFile(file);
-      const res = await api.analyze(uploadFile, compModel || undefined);
+      // 원본 파일을 그대로 전송 (백엔드가 calamine으로 빠르게 파싱). 클라이언트 변환은 메인스레드를 얼려서 제거함.
+      const res = await api.analyze(file, compModel || undefined);
       setUa({ result: res, chat: [] });
       setLastResult(res);
       await refreshHistory();
@@ -355,7 +359,7 @@ export default function UserAnalysis() {
             {parsing && <p className="text-xs text-muted-foreground inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> 파일 파싱 중…</p>}
             {parsed && (
               <p className="text-xs text-muted-foreground">
-                행 {parsed.rowCount.toLocaleString()} · 컬럼 {parsed.columnCount} · Trip 구간 {parsed.tripCount}개 · 컬럼명 기준: <b>{mode}</b>(={mode === "차압" ? "DPS" : "NODPS"})
+                행 {parsed.rowCount.toLocaleString()} · 컬럼 {parsed.columnCount} · Trip 구간 {tripCountShown}개{result ? "(백엔드)" : "(분석 전)"} · 컬럼명 기준: <b>{mode}</b>(={mode === "차압" ? "DPS" : "NODPS"})
               </p>
             )}
             {err && <p className="text-xs text-destructive">{err}</p>}
@@ -396,7 +400,7 @@ export default function UserAnalysis() {
                 <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium shrink-0">AI</div>
                 <div className="flex-1 rounded-lg border bg-muted/40 p-4 space-y-4 text-sm">
                   <p className="leading-relaxed">
-                    {file?.name && <b>{file.name}</b>} 파일에서 Trip 구간 <b>{parsed?.tripCount ?? 0}개</b>가 감지되었습니다.
+                    {file?.name && <b>{file.name}</b>} 파일에서 Trip 구간 <b>{tripCountShown}개</b>가 감지되었습니다.
                     {result ? <> 백엔드 판정 결과는 <b>{result.verdict}</b>입니다.</> : " (실행 시 백엔드 판정이 표시됩니다.)"}
                   </p>
                   {parsed && (
@@ -407,15 +411,15 @@ export default function UserAnalysis() {
                         : parsed.tripCodes.map((c) => (tripNames[c] ? `${c} · ${tripNames[c]}` : `${c}`)).join(",  ")}
                     </p>
                   )}
-                  {parsed && parsed.tripRanges.length > 0 && (
+                  {tripRangesShown.length > 0 && (
                     <p className="text-xs leading-relaxed">
                       <span className="text-muted-foreground">트립 발생 시간(구간): </span>
-                      {parsed.tripRanges.map(([a, b]) => (a === b ? `${a}` : `${a}~${b}`)).join(",  ")}
+                      {tripRangesShown.map(([a, b]) => (a === b ? `${a}` : `${a}~${b}`)).join(",  ")}
                     </p>
                   )}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
-                      ["Trip 구간(파일)", `${parsed?.tripCount ?? 0}개`],
+                      ["Trip 구간(백엔드)", result ? `${result.trip.count}개` : "-"],
                       ["행 수", parsed ? parsed.rowCount.toLocaleString() : "-"],
                       ["판정(백엔드)", result?.verdict ?? "-"],
                       ["이상치(백엔드)", result ? String(result.quality.outliers) : "-"],

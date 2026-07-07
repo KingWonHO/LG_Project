@@ -272,9 +272,20 @@ async def analyze(file: UploadFile = File(...), comp_model: str | None = Form(No
     # 업로드 파일 디스크 저장
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
-    save_path = upload_dir / file.filename
     content = await file.read()
-    save_path.write_bytes(content)
+    # 파일 저장(기록용). 같은 이름 파일이 잠겨 있으면(엑셀에서 열려있거나 V3 스캔 중)
+    # 고유 이름으로 저장 시도하고, 그래도 실패하면 저장은 건너뛴다.
+    # 분석은 디스크가 아니라 메모리의 content로 수행하므로 저장 실패해도 진행된다.
+    save_path = upload_dir / file.filename
+    try:
+        save_path.write_bytes(content)
+    except OSError:
+        import time
+        save_path = upload_dir / f"{int(time.time())}_{file.filename}"
+        try:
+            save_path.write_bytes(content)
+        except OSError:
+            pass  # 저장 실패 무시 (분석은 content로 계속)
 
     # ANA-001/002: 파싱 + 표준 컬럼 매핑 (실패 시 400, DB 기록 없음)
     try:
