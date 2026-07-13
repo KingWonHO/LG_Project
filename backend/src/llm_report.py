@@ -48,17 +48,14 @@ __ANALYSIS_JSON__
 [RAG 검색 근거]
 __RAG_RESULTS__
 
-[실측 데이터 (백엔드가 DATA_REQUEST에 답한 실제 수치. 있으면 이 값만 사용)]
-__FETCHED__
+[엔지니어 분석 규칙 — 해석기준 (판단/해석의 핵심 근거. 반드시 참고할 것)]
+__ENGINEER_RULES__
 
-■ 실제 수치가 필요하면(예: 특정 시점의 MtoC/Power/Real_Hz 값) 답변을 쓰지 말고, 먼저 아래 한 줄만 출력한다:
-DATA_REQUEST: [15@<초>, 7@<초>]
-   - 컬럼은 룰 태그 [번호|이름]의 번호를 쓴다 (예: [15|MtoC]→15, [7|Power]→7, [5|Real_Hz]→5, [20|Trip]→20).
-   - 시점(초)은 반드시 trip_events의 실제 start/end 값을 쓴다. [실측 데이터]에 값이 이미 있으면 그 값만 쓰고 DATA_REQUEST를 다시 내지 않는다.
-
-■ 엔지니어 분석 규칙의 조건/코드/수치(예: "Trip=6 or 7 or 5", "MtoC=홀수로 변경")는 판단 기준일 뿐이다.
-   그 문장을 그대로 옮기지 말고, trip_events의 실제 발생 코드/시간과 [실측 데이터]의 실제 수치로만 서술한다.
-   룰에 나열된 후보 코드/조건을 그대로 나열하지 마라.
+■ 위 [엔지니어 분석 규칙 — 해석기준]을 판단과 해석의 핵심 근거로 반드시 참고하여 '## 판정'·'## 분석'·'## 조치'를 작성한다.
+   (해석기준이 설명하는 판단 논리·정상/이상 패턴·필요조치를 근거로 삼는다.)
+   단, 규칙 안의 조건문·후보 코드·기호 조건(예: "Trip=6 or 7 or 5", "MtoC=홀수로 변경")은 그대로 옮기지 말고,
+   trip_events의 실제 발생 코드/시간으로 바꿔 서술한다.
+   trip_events에 없는 내부 신호 수치(MtoC 등)는 단정하지 말고 정성적으로만 언급한다.
 
 너는 반드시 아래 4개 섹션만, 아래 순서로 작성한다. 섹션 이름을 바꾸거나 추가하지 마라.
 
@@ -71,50 +68,51 @@ DATA_REQUEST: [15@<초>, 7@<초>]
   관리필요: Trip은 없지만 비정상 경향/제어성능 저하/기동 약화/추가 검토가 필요한 경우
 
 ## 판정
-- 전체 이벤트 요약만 작성한다. (Trip 발생 여부, 발생 횟수, Trip 종류별 횟수, 비정상 운전구간 수)
-- 원인/해석/점검/조치 표현은 절대 쓰지 않는다.
-- 예) AI 분석결과 트립 발생 3건이 확인되었습니다. 6번 과전류 Trip 2회, 7번 FO/IPM 보호 Trip 1회가 발생하였으며, 비정상 운전구간 1구간이 확인되었습니다.
-- Trip이 없으면: AI 분석결과 Trip 발생은 0회입니다. (필요 시 비정상 의심구간 언급)
+- 총 발생 건수 + 실제 발생한 Trip 코드별 횟수만 쓴다.
+- ★발생 횟수가 0인 Trip 코드는 절대 쓰지 않는다 ("7번 …0회" 금지). trip_events에 실제 있는 코드만 쓴다.
+- 비정상 운전구간은 데이터에 실제 근거가 있을 때만 쓰고, 없으면 언급하지 않는다. 원인·조치 표현 금지.
+- 예) AI 분석결과 트립 발생 10건이 확인되었습니다. 6번 과전류 Trip 10회.
 
 ## 분석
-- 시간 순서대로 번호를 붙여 작성한다. 각 항목에 발생 시점/현상/간략 해석을 포함한다.
-- ★발생 시점/구간과 Trip 코드는 반드시 [분석 결과 JSON]의 trip_events(각 항목 start~end초, codes) 또는 trip_ranges의 실제 값만 사용한다. 목록에 없는 시간·구간·코드를 절대 만들지 마라. trip_events가 비어 있으면(트립 0회) 시점을 언급하지 말고 정상 관점으로 서술한다.
-- 점검/확인/조치/개선 같은 조치 방법은 여기 쓰지 않는다. CSV로 확인 불가한 내부 신호는 단정하지 않는다.
+- trip_events의 발생마다 번호를 붙여 개별로 모두 나열한다 (묶거나 생략하지 않는다).
+- 각 항목 = {실제 시점}초 구간에서 {N}번 {트립명} Trip이 확인되었습니다. + {현상 설명(현상정의/RAG 기반)} + 예상원인은 {룰의 예상원인} 가능성이 있습니다.
+- ★시점·Trip 코드는 trip_events의 실제 값만 쓴다. 없는 시간/코드는 만들지 않는다.
+- ★조치/점검/보고/개선/확인 필요 같은 조치 문구는 분석에 절대 넣지 않는다 (조치는 '## 조치'에만).
 - 형식:
-  1. {시간}초 구간에서 {현상}이 확인되었습니다. {간략 해석}
-  2. {시간}초 구간에서 {현상}이 확인되었습니다. {간략 해석}
+  1. {시점}초 구간에서 {N}번 {트립명} Trip이 확인되었습니다. {현상 설명}. 예상원인은 {예상원인} 가능성이 있습니다.
 
 ## 조치
-- 분석 항목과 동일한 번호로, 각 구간별 점검/조치 방향을 짧게 작성한다.
-- 원인은 단정하지 말고 "가능성", "의심", "확인 필요"로 표현한다. 필요 시 "Comp SW 담당자 확인 필요"를 포함한다.
+- 분석과 동일한 번호·순서로, 각 발생에 대해 엔지니어 룰의 "필요조치"를 반영해 작성한다.
+- 룰에 "필요조치: Comp SW 담당자에게 보고한다"가 있으면 → "Comp SW 담당자에게 보고 필요합니다."처럼 그 조치를 쓴다. 임의의 일반 문구로 대체하지 않는다.
 - 형식:
-  1. {시간}초 구간의 {현상}에 대해서는 {점검 항목} 확인이 필요합니다.
-  2. {시간}초 구간의 {현상}에 대해서는 {조치 방향} 검토가 필요합니다.
+  1. {시점}초 구간의 {N}번 {트립명} Trip에 대해서는 {룰의 필요조치}.
 
 작성 규칙:
 1. 반드시 "## 결과", "## 판정", "## 분석", "## 조치" 네 섹션만 출력한다.
-2. "판정"에는 Trip 발생 여부/횟수/종류/비정상 구간 수만 쓴다. 원인·조치 금지.
-3. "분석"에는 RAG 기반 원인/의미만 쓴다. 점검·확인·조치·개선 표현 금지.
-4. "조치"에는 RAG 기반 조치 방법·우선 점검 항목만 쓴다.
-5. RAG 문장에 원인과 조치가 함께 있어도 원인은 "분석"에, 조치는 "조치"에 분리한다.
-6. RAG에 없는 원인/조치를 임의로 만들지 않는다. 분석 JSON에 없는 Trip 횟수를 지어내지 않는다.
-7. Trip 발생 횟수가 0이면 "Trip 발생은 0회입니다"라고 명확히 쓴다.
-8. Imag는 실제 전류값이 아니므로 정량 판단에 쓰지 않고 "높음/낮음/급증/불안정" 정성 신호로만 언급한다.
-9. Current Trip Level(4.2A/4.3A)을 Imag와 직접 비교하지 않는다.
-10. IPM 온도는 PCB별 정확도 차이가 있어 절대값 단정 대신 경향성으로 설명한다.
-11. 엔지니어가 바로 읽도록 짧고 명확하게. 장황한 배경 설명은 생략한다.
-12. 시점/구간/Trip 코드는 분석 JSON의 trip_events·trip_ranges에 있는 실제 Time 값만 사용하고 지어내지 않는다. trip_events가 비어 있으면 분석·조치에서 시점을 언급하지 않는다.
-13. 엔지니어 룰의 조건문/후보 코드/기호 조건(MtoC=홀수 등)을 그대로 복사하지 않는다. 실제 발생 코드(trip_events)와 [실측 데이터]의 실제 수치로 바꿔 쓴다.
-14. MtoC 등 특정 시점의 실제 값이 필요하면 DATA_REQUEST로 요청해 받은 [실측 데이터] 값만 사용한다. 값이 없으면 그 수치를 단정하지 않는다.
+2. "판정"에는 실제 발생한 Trip 코드별 횟수만 쓴다. 0회 코드·원인·조치는 금지.
+3. "분석"에는 시점+현상+예상원인만 쓴다. 조치·점검·보고·개선·확인 필요 표현 금지.
+4. "조치"에는 엔지니어 룰의 필요조치(및 RAG 조치)만 쓴다. 분석 내용과 중복하지 않는다.
+5. 원인은 "분석"에, 조치는 "조치"에 분리한다. 한 문장에 원인과 조치를 섞지 않는다.
+6. RAG/룰에 없는 원인·조치를 지어내지 않는다. 분석 JSON에 없는 Trip 횟수를 만들지 않는다.
+7. Trip 발생이 0회면 "Trip 발생은 0회입니다"라고 쓰고, 분석·조치는 정상 관점으로 서술한다.
+8. Imag는 정량 판단에 쓰지 않고 "높음/낮음/급증/불안정" 정성 신호로만 언급한다.
+9. IPM 온도는 절대값 단정 대신 경향성으로 설명한다.
+10. 트립이 많아도 trip_events 발생 수만큼 개별로 모두 나열한다 (묶거나 생략 금지).
+11. 시점·구간·Trip 코드는 trip_events의 실제 값만 쓰고 지어내지 않는다.
+12. 엔지니어 룰의 해석기준·현상정의·예상원인·필요조치를 근거로 삼되, 조건문/후보 코드/기호 조건(MtoC=홀수, Trip=6 or 7 등)은 그대로 복사하지 말고 실제 발생 코드로 바꿔 쓴다.
+13. trip_events에 없는 내부 신호 수치(MtoC 등)는 단정하지 말고 정성적으로만 언급한다.
 
 이제 위 형식대로만 답변한다.
 """
-    fetched = analysis_json.get("fetched_values") if isinstance(analysis_json, dict) else None
-    fetched_text = str(fetched) if fetched else "(아직 없음 — 필요하면 DATA_REQUEST로 요청)"
+    engineer_rules_text = ""
+    if isinstance(analysis_json, dict):
+        engineer_rules_text = analysis_json.get("engineer_rules") or ""
+    if not str(engineer_rules_text).strip():
+        engineer_rules_text = "(적용되는 엔지니어 분석 규칙 없음)"
     return (
         prompt.replace("__ANALYSIS_JSON__", str(analysis_json))
         .replace("__RAG_RESULTS__", str(rag_results))
-        .replace("__FETCHED__", fetched_text)
+        .replace("__ENGINEER_RULES__", str(engineer_rules_text))
         .strip()
     )
 
@@ -160,6 +158,19 @@ def _parse_sections(text: str) -> dict[str, str]:
     return sections
 
 
+def _drop_zero_count_clauses(text: str | None) -> str | None:
+    """결과/판정에서 발생하지 않은 Trip 언급('…0회' 조각)을 제거한다 (예: '7번 …0회')."""
+    if not text:
+        return text
+    segs = re.split(r",\s*", text)
+    # 숫자 0인 '0회'만 제거 (앞에 숫자가 있으면 10회·20회 등이므로 유지)
+    kept = [seg for seg in segs if not re.search(r"(?<!\d)0\s*회", seg)]
+    out = ", ".join(kept)
+    out = re.sub(r"(가|이) 발생하였으며\s*,?\s*", "", out)
+    out = re.sub(r"\s{2,}", " ", out).strip().rstrip(",").strip()
+    return out
+
+
 def normalize_summary_format(
     summary: str,
     analysis_json: dict[str, Any],
@@ -170,8 +181,8 @@ def normalize_summary_format(
     rag_results = rag_results or []
     sec = _parse_sections(summary)
 
-    result = sec.get("결과")
-    judgement = sec.get("판정")
+    result = _drop_zero_count_clauses(sec.get("결과"))
+    judgement = _drop_zero_count_clauses(sec.get("판정"))
     analysis = sec.get("분석")
     action = sec.get("조치") or build_action_line(analysis_json, rag_results)
 
@@ -240,8 +251,8 @@ def generate_rule_based_summary(
     )
 
 
-def _call_llm(prompt: str, model: str) -> str:
-    """단일 LLM 호출 → content 문자열 반환."""
+def _call_llm(prompt: str, model: str, num_predict: int = 512) -> str:
+    """단일 LLM 호출 → content 문자열 반환. num_predict=출력 최대 토큰(트립 수에 따라 확대)."""
     response = ollama.chat(
         model=model,
         messages=[
@@ -251,13 +262,12 @@ def _call_llm(prompt: str, model: str) -> str:
                     "너는 Compressor 제어검증 분석 결과를 한국어로 요약하는 전문 AI Agent이다. "
                     "반드시 '## 결과', '## 판정', '## 분석', '## 조치' 네 섹션만 출력하라. "
                     "판정에는 발생 여부와 횟수만 쓰고, 원인은 분석에, 조치는 조치 섹션에만 작성하라. "
-                    "엔지니어 룰의 조건/후보 코드를 그대로 복사하지 말고 실제 발생값(trip_events)과 실측 데이터만 사용하라. "
-                    "필요한 실제 수치가 있으면 'DATA_REQUEST: [지표@초]' 한 줄만 먼저 출력하라."
+                    "엔지니어 룰의 조건/후보 코드를 그대로 복사하지 말고 실제 발생값(trip_events)만 사용하라."
                 ),
             },
             {"role": "user", "content": prompt},
         ],
-        options={"temperature": 0.1, "num_predict": 512},
+        options={"temperature": 0.1, "num_predict": num_predict, "num_ctx": 8192},
     )
     return (response["message"]["content"] or "").strip()
 
@@ -284,10 +294,10 @@ def generate_llm_summary(
     model_name: str | None = None,
     data_fetcher=None,
 ) -> str:
-    """Ollama 로컬 LLM 기반 요약 (결과/판정/분석/조치 4섹션).
+    """Ollama 로컬 LLM 기반 요약 (결과/판정/분석/조치 4섹션, 단일 패스).
 
-    data_fetcher: LLM이 DATA_REQUEST로 실제 수치를 요청하면, 그 목록(list[str])을 받아
-    실측값(dict)을 돌려주는 콜백(main.py가 df 접근해 제공). None이면 요청 기능 비활성.
+    trip_events(실제 발생 코드/구간)는 analysis_json에 이미 포함되어 프롬프트로 주입된다.
+    data_fetcher: 하위호환용 파라미터(현재 미사용).
     """
     rag_results = rag_results or []
     if not rag_results and isinstance(analysis_json, dict):
@@ -296,28 +306,18 @@ def generate_llm_summary(
             rag_results = [rc] if isinstance(rc, str) else list(rc)
 
     model = get_local_model_name(model_name)
+    # 트립이 많으면 출력이 길어지므로 출력 토큰 상한을 발생 수에 비례해 늘린다 (5회에서 잘리던 문제 해결).
+    n_trips = 0
+    if isinstance(analysis_json, dict):
+        n_trips = max(int(analysis_json.get("trip_count") or 0), len(analysis_json.get("trip_events") or []))
+    num_predict = min(2048, 640 + n_trips * 120)
     try:
-        # 1차: 답변 또는 DATA_REQUEST
-        content = _call_llm(build_summary_prompt(analysis_json, rag_results), model)
-
-        # LLM이 실제 수치를 요청했고 콜백이 있으면 → 백엔드에서 받아 2차 생성
-        reqs = _parse_data_request(content)
-        if reqs and data_fetcher is not None:
-            try:
-                fetched = data_fetcher(reqs)
-            except Exception:
-                fetched = {}
-            if fetched:
-                aj2 = {**analysis_json, "fetched_values": fetched}
-                content = _call_llm(build_summary_prompt(aj2, rag_results), model)
-
-        content = _strip_data_request(content)
+        content = _call_llm(build_summary_prompt(analysis_json, rag_results), model, num_predict=num_predict)
+        content = _strip_data_request(content)  # 혹시 모를 잔여 라인 방어적 제거
         if not content:
             fb = generate_rule_based_summary(analysis_json, rag_results)
             return f"[로컬 LLM 응답이 비어 있어 rule-based 요약을 반환합니다]\n사용 모델: {model}\n\n{fb}"
-
         return normalize_summary_format(content, analysis_json, rag_results)
-
     except Exception as exc:
         fb = generate_rule_based_summary(analysis_json, rag_results)
         return f"[로컬 LLM 호출 실패로 rule-based 요약을 반환합니다]\n사용 모델: {model}\n오류 내용: {exc}\n\n{fb}"

@@ -650,11 +650,7 @@ def report(analysis: dict) -> dict:
         "mtoc_states": analysis.get("mtoc"),
         "rag_context": rag_context,
     }
-    # LLM이 DATA_REQUEST로 실제 수치를 요청하면 원본 df에서 받아 2차 생성
-    _df_for_query = _reload_analysis_df(analysis)
-    summary = llm_report.generate_llm_summary(
-        llm_input, data_fetcher=lambda reqs: _answer_data_requests(_df_for_query, reqs)
-    )
+    summary = llm_report.generate_llm_summary(llm_input)
     return {
         "summary": summary,
         "model": llm_report.get_local_model_name(),

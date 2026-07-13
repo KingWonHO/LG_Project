@@ -47,7 +47,7 @@ React(shadcn/ui) 프론트 → FastAPI 백엔드 → 로컬 Ollama LLM(gemma3:4b
 - ✅ DB(SQLAlchemy): 파일·분석결과·TripCode·baseline·Prompt (DB-001~005) + 분석결과 삭제
 - ✅ RAG(RAG-001/002): `rag_engine`(ChromaDB+sentence-transformers) → report에 컨텍스트 주입 + 수동 재인덱싱
 - ✅ LLM(LLM-001): `llm_report` 로컬 Ollama(gemma3:4b) 요약, 실패 시 rule-based 폴백
-- ⬜ ANA-005 데이터 품질(`data_quality_checker.py` 빈 스텁) → quality 0 고정
+- ⬜ ANA-005 데이터 품질 검사 미구현(전용 모듈 없음) → quality 0 고정
 - ⬜ baseline 자동 학습(학습 탭용) 엔드포인트
 - ⬜ RPT-002 리포트 PDF 생성
 - ⬜ LLM-002/003 원인·조치 분리 출력
@@ -64,4 +64,4 @@ React(shadcn/ui) 프론트 → FastAPI 백엔드 → 로컬 Ollama LLM(gemma3:4b
 
 ---
 
-_최종 수정: 2026-07-03_
+_최종 수정: 2026-07-13_
