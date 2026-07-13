@@ -11,6 +11,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pandas as pd
+import re
+
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -258,6 +261,26 @@ def compressors() -> dict:
 # ---------------------------------------------------------------------------
 # 분석 (USR / ANA)
 # ---------------------------------------------------------------------------
+def _trip_events(df: "pd.DataFrame", trip: dict) -> list[dict]:
+    """각 트립 구간의 [시작 Time, 종료 Time]과 그 구간에 실제 나타난 Trip_Code 목록을 만든다.
+    LLM이 구간/시점을 지어내지 않고 실제 Time·코드만 근거로 쓰도록 넘기는 데이터."""
+    events: list[dict] = []
+    try:
+        if "Trip_Code" not in df.columns or "Time" not in df.columns:
+            return events
+        for rng in (trip.get("ranges") or []):
+            if not rng or len(rng) < 2:
+                continue
+            start, end = rng[0], rng[1]
+            seg = df[(df["Time"] >= start) & (df["Time"] <= end)]
+            codes_num = pd.to_numeric(seg["Trip_Code"], errors="coerce").dropna()
+            codes = sorted({int(c) for c in codes_num.tolist() if c != 0})
+            events.append({"start": start, "end": end, "codes": codes})
+    except Exception:
+        pass
+    return events
+
+
 @app.post("/api/analyze")
 async def analyze(file: UploadFile = File(...), comp_model: str | None = Form(None)) -> dict:
     """파일 업로드 → 분석 (ANA-001~007).
@@ -272,9 +295,20 @@ async def analyze(file: UploadFile = File(...), comp_model: str | None = Form(No
     # 업로드 파일 디스크 저장
     upload_dir = Path(settings.upload_dir)
     upload_dir.mkdir(parents=True, exist_ok=True)
-    save_path = upload_dir / file.filename
     content = await file.read()
-    save_path.write_bytes(content)
+    # 파일 저장(기록용). 같은 이름 파일이 잠겨 있으면(엑셀에서 열려있거나 V3 스캔 중)
+    # 고유 이름으로 저장 시도하고, 그래도 실패하면 저장은 건너뛴다.
+    # 분석은 디스크가 아니라 메모리의 content로 수행하므로 저장 실패해도 진행된다.
+    save_path = upload_dir / file.filename
+    try:
+        save_path.write_bytes(content)
+    except OSError:
+        import time
+        save_path = upload_dir / f"{int(time.time())}_{file.filename}"
+        try:
+            save_path.write_bytes(content)
+        except OSError:
+            pass  # 저장 실패 무시 (분석은 content로 계속)
 
     # ANA-001/002: 파싱 + 표준 컬럼 매핑 (실패 시 400, DB 기록 없음)
     try:
@@ -306,6 +340,7 @@ async def analyze(file: UploadFile = File(...), comp_model: str | None = Form(No
             trip = trip_analyzer.analyze_trip(df)
         else:
             trip = {"count": 0, "ranges": []}
+        trip_events = _trip_events(df, trip)
 
         # ANA-004: baseline 비교 (정상 기준은 DB에서 로드 / 미등록 시 이탈 없음)
         baseline = baseline_analyzer.analyze_baseline(df, _load_baseline_ranges())
@@ -334,7 +369,7 @@ async def analyze(file: UploadFile = File(...), comp_model: str | None = Form(No
         )
         db_manager.update_file_status(db_file.id, "done")
 
-        return {**result, "filename": file.filename, "file_id": db_file.id, "result_id": db_result.id, "comp_model": comp_model, "mtoc": mtoc_states, "data_type": data_type, "param_anomalies": param_anomalies}
+        return {**result, "filename": file.filename, "file_id": db_file.id, "result_id": db_result.id, "comp_model": comp_model, "mtoc": mtoc_states, "data_type": data_type, "param_anomalies": param_anomalies, "trip_events": trip_events}
 
     except Exception:
         db_manager.update_file_status(db_file.id, "error")
@@ -511,6 +546,63 @@ def put_prompt(body: PromptBody) -> dict:
 # ---------------------------------------------------------------------------
 # 리포트 (RPT)
 # ---------------------------------------------------------------------------
+def _reload_analysis_df(analysis: dict):
+    """분석 대상 원본 파일을 다시 읽어(같은 전처리) df를 만든다. DATA_REQUEST 응답용.
+    file_id로 DB에서 파일 경로를 얻는다. 실패하면 None (요청 응답 기능만 비활성)."""
+    try:
+        fid = analysis.get("file_id")
+        if fid is None:
+            return None
+        db_file = db_manager.get_file_info(fid)
+        if not db_file:
+            return None
+        fp = Path(db_file.file_path)
+        if not fp.exists():
+            return None
+        df = column_mapper.map_columns(file_parser.parse_file(db_file.filename, fp.read_bytes()))
+        dt = "DPS" if "Trial_Count" in df.columns else ("NODPS" if "Wait_Time" in df.columns else None)
+        return noise_filter.clean_noise(df, dt)
+    except Exception:
+        return None
+
+
+def _answer_data_requests(df, requests: list[str]) -> dict:
+    """LLM의 DATA_REQUEST(['MtoC@6118', 'Power@6118'])에 실제 df 수치로 답한다.
+    각 '지표@초'에 대해 해당 컬럼의 그 시점(가장 가까운 Time) 실제 값을 반환한다."""
+    out: dict = {}
+    if df is None or "Time" not in df.columns:
+        return out
+    times = pd.to_numeric(df["Time"], errors="coerce")
+    ncol = df.shape[1]
+    for req in requests:
+        m = re.match(r"\s*([^@]+)@\s*(-?\d+(?:\.\d+)?)\s*$", req)
+        if not m:
+            continue
+        key, t = m.group(1).strip(), float(m.group(2))
+        # 컬럼 결정: 룰 태그 [번호|이름]의 번호(인덱스=위치) 우선, 아니면 컬럼명
+        col = None
+        if re.fullmatch(r"\d+", key):
+            i = int(key)
+            if 0 <= i < ncol:
+                col = df.columns[i]
+        if col is None and key in df.columns:
+            col = key
+        if col is None:
+            out[req] = "해당 컬럼 없음"
+            continue
+        try:
+            idx = (times - t).abs().idxmin()
+            val = df.loc[idx, col]
+            if pd.isna(val):
+                out[req] = None
+            else:
+                fv = float(val)
+                out[req] = int(fv) if fv.is_integer() else round(fv, 3)
+        except Exception:
+            out[req] = None
+    return out
+
+
 @app.post("/api/report")
 def report(analysis: dict) -> dict:
     """분석 결과(dict) → RAG 검색 + 로컬 LLM 요약 생성 (RAG-002, LLM-001)."""
@@ -543,6 +635,8 @@ def report(analysis: dict) -> dict:
     llm_input = {
         "final_judgement": analysis.get("verdict", "UNKNOWN"),
         "trip_count": trip.get("count", 0),
+        "trip_ranges": trip.get("ranges", []),
+        "trip_events": analysis.get("trip_events", []),
         "abnormal_items": out_of_range,
         "baseline_deviation": [
             {"column": c, "description": "정상 baseline 이탈"} for c in out_of_range

@@ -13,7 +13,7 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { parseDataFile, LINE_COLORS, expandNarrowTripRanges, type ParsedFile } from "@/lib/parseFile";
 import { canonicalName, isPlottable, isNoise, type PressureMode } from "@/lib/columnSchema";
 import { api, type CompressorsData, type AnalyzeResponse, type ChatMsg } from "@/lib/api";
-import { useApp } from "@/context";
+import { useApp, useRole } from "@/context";
 import { cn } from "@/lib/utils";
 
 function VerdictBadge({ verdict }: { verdict: string | null }) {
@@ -155,10 +155,11 @@ function GraphCard({ parsed, mode, tripRanges, cols, selectable, index, canRemov
   // 노이즈 전처리: 정상범위(엔지니어 스펙)를 벗어난 값을 그래프에서 제거(null)
   const [cleanNoise, setCleanNoise] = useState(true);
   const chartData = useMemo<Record<string, number | null>[]>(() => {
-    if (!cleanNoise || drawn.length === 0) return parsed.series;
+    const dr = cols.filter((i) => isPlottable(i, mode) && parsed.numericIndices.includes(i));
+    if (!cleanNoise || dr.length === 0) return parsed.series;
     return parsed.series.map((row) => {
       let out: Record<string, number | null> = row;
-      for (const idx of drawn) {
+      for (const idx of dr) {
         const v = row[String(idx)];
         if (typeof v === "number" && isNoise(idx, mode, v)) {
           out = out === row ? { ...row } : out;
@@ -167,7 +168,7 @@ function GraphCard({ parsed, mode, tripRanges, cols, selectable, index, canRemov
       }
       return out;
     });
-  }, [parsed.series, drawn, mode, cleanNoise]);
+  }, [parsed.series, parsed.numericIndices, cols, mode, cleanNoise]);
 
   return (
     <Card>
@@ -225,7 +226,8 @@ function GraphCard({ parsed, mode, tripRanges, cols, selectable, index, canRemov
               <Brush dataKey="time" height={18} stroke="#94a3b8" travellerWidth={8}
                      startIndex={range[0]} endIndex={range[1]}
                      onChange={(r: any) => {
-                       if (r && typeof r.startIndex === "number" && typeof r.endIndex === "number") setRange([r.startIndex, r.endIndex]);
+                       if (!r || typeof r.startIndex !== "number" || typeof r.endIndex !== "number") return;
+                       setRange((prev) => (prev[0] === r.startIndex && prev[1] === r.endIndex ? prev : [r.startIndex, r.endIndex]));
                      }}
                      tickFormatter={(t) => String(t)} />
             </LineChart>
@@ -238,6 +240,7 @@ function GraphCard({ parsed, mode, tripRanges, cols, selectable, index, canRemov
 
 export default function UserAnalysis() {
   const { ua, setUa, refreshHistory, setLastResult } = useApp();
+  const { role } = useRole();
   const { file, parsed, mode, compModel, graphs, result } = ua;
   const navigate = useNavigate();
 
@@ -262,6 +265,13 @@ export default function UserAnalysis() {
   const compParams = compModel ? compData.compressors[compModel]?.parameters : undefined;
 
   const verdict = result?.verdict ?? null;
+  // Trip 수/구간은 백엔드 판정(result) 우선, 실행 전에는 프론트 파싱값(예상)
+  const tripCountShown = result ? result.trip.count : (parsed?.tripCount ?? 0);
+  // 실제 트립 케이스(trip_case)에 등록된 코드만 유효 트립으로 표시, 나머지는 정상으로 간주
+  const validTripCodes = parsed ? parsed.tripCodes.filter((c) => tripNames[c] != null) : [];
+  const tripRangesShown: [number, number][] = result
+    ? (result.trip.ranges as [number, number][])
+    : (parsed?.tripRanges ?? []);
   const tripRanges = parsed
     ? expandNarrowTripRanges(parsed.tripRanges, parsed.series[0]?.time ?? 0, parsed.series[parsed.series.length - 1]?.time ?? 0)
     : [];
@@ -297,6 +307,7 @@ export default function UserAnalysis() {
     if (!file) { setErr("CSV/XLSX 파일을 먼저 선택하세요."); return; }
     setRunning(true); setErr(null);
     try {
+      // 원본 파일을 그대로 전송 (백엔드가 calamine으로 빠르게 파싱). 클라이언트 변환은 메인스레드를 얼려서 제거함.
       const res = await api.analyze(file, compModel || undefined);
       setUa({ result: res, chat: [] });
       setLastResult(res);
@@ -313,7 +324,7 @@ export default function UserAnalysis() {
       <div className="flex items-center justify-between gap-4">
         <TabsList>
           <TabsTrigger value="analysis">분석</TabsTrigger>
-          <TabsTrigger value="learning">학습</TabsTrigger>
+          {role === "engineer" && <TabsTrigger value="learning">학습</TabsTrigger>}
         </TabsList>
         <div className="flex items-center gap-3">
           <Select value={compModel || undefined} onValueChange={(v) => setUa({ compModel: v })}>
@@ -351,7 +362,7 @@ export default function UserAnalysis() {
             {parsing && <p className="text-xs text-muted-foreground inline-flex items-center gap-1"><Loader2 className="h-3 w-3 animate-spin" /> 파일 파싱 중…</p>}
             {parsed && (
               <p className="text-xs text-muted-foreground">
-                행 {parsed.rowCount.toLocaleString()} · 컬럼 {parsed.columnCount} · Trip 구간 {parsed.tripCount}개 · 컬럼명 기준: <b>{mode}</b>(={mode === "차압" ? "DPS" : "NODPS"})
+                행 {parsed.rowCount.toLocaleString()} · 컬럼 {parsed.columnCount} · Trip 구간 {tripCountShown}개{result ? "(백엔드)" : "(분석 전)"} · 컬럼명 기준: <b>{mode}</b>(={mode === "차압" ? "DPS" : "NODPS"})
               </p>
             )}
             {err && <p className="text-xs text-destructive">{err}</p>}
@@ -392,26 +403,26 @@ export default function UserAnalysis() {
                 <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium shrink-0">AI</div>
                 <div className="flex-1 rounded-lg border bg-muted/40 p-4 space-y-4 text-sm">
                   <p className="leading-relaxed">
-                    {file?.name && <b>{file.name}</b>} 파일에서 Trip 구간 <b>{parsed?.tripCount ?? 0}개</b>가 감지되었습니다.
+                    {file?.name && <b>{file.name}</b>} 파일에서 Trip 구간 <b>{tripCountShown}개</b>가 감지되었습니다.
                     {result ? <> 백엔드 판정 결과는 <b>{result.verdict}</b>입니다.</> : " (실행 시 백엔드 판정이 표시됩니다.)"}
                   </p>
                   {parsed && (
                     <p className="text-xs leading-relaxed">
                       <span className="text-muted-foreground">발생 Trip Code: </span>
-                      {parsed.tripCodes.length === 0
+                      {validTripCodes.length === 0
                         ? "없음"
-                        : parsed.tripCodes.map((c) => (tripNames[c] ? `${c} · ${tripNames[c]}` : `${c}`)).join(",  ")}
+                        : validTripCodes.map((c) => `${c} · ${tripNames[c]}`).join(",  ")}
                     </p>
                   )}
-                  {parsed && parsed.tripRanges.length > 0 && (
+                  {tripRangesShown.length > 0 && (
                     <p className="text-xs leading-relaxed">
                       <span className="text-muted-foreground">트립 발생 시간(구간): </span>
-                      {parsed.tripRanges.map(([a, b]) => (a === b ? `${a}` : `${a}~${b}`)).join(",  ")}
+                      {tripRangesShown.map(([a, b]) => (a === b ? `${a}` : `${a}~${b}`)).join(",  ")}
                     </p>
                   )}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                     {[
-                      ["Trip 구간(파일)", `${parsed?.tripCount ?? 0}개`],
+                      ["Trip 구간(백엔드)", result ? `${result.trip.count}개` : "-"],
                       ["행 수", parsed ? parsed.rowCount.toLocaleString() : "-"],
                       ["판정(백엔드)", result?.verdict ?? "-"],
                       ["이상치(백엔드)", result ? String(result.quality.outliers) : "-"],
@@ -429,7 +440,6 @@ export default function UserAnalysis() {
         </Card>
 
         {/* LLM 대화 (분석 실행 후) */}
-        {result && <ChatPanel analysis={result} />}
 
         {/* 그래프 */}
         <div className="flex items-center justify-between">
@@ -468,9 +478,13 @@ export default function UserAnalysis() {
       </TabsContent>
 
       <TabsContent value="learning" className="mt-3">
-        <Card><CardContent className="pt-6 text-sm text-muted-foreground">
-          학습 기능은 추후 제공 예정입니다. (정상 baseline 학습/갱신)
-        </CardContent></Card>
+        {result ? (
+          <ChatPanel analysis={result} />
+        ) : (
+          <Card><CardContent className="pt-6 text-sm text-muted-foreground">
+            LLM 대화를 하려면 먼저 [분석] 탭에서 파일을 선택하고 실행하세요.
+          </CardContent></Card>
+        )}
       </TabsContent>
     </Tabs>
   );

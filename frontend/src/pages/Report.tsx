@@ -6,6 +6,23 @@ import { Sparkles, Loader2, Download, AlertTriangle, CheckCircle2, XCircle, Book
 import { api } from "@/lib/api";
 import { useApp } from "@/context";
 
+// "## 결과/판정/분석/조치" 4섹션 요약을 헤더 스타일로 렌더링 (마크다운 라이브러리 없이)
+function SummaryView({ text }: { text: string }) {
+  const lines = text.split("\n");
+  return (
+    <div className="space-y-1">
+      {lines.map((line, i) => {
+        const h = line.match(/^\s*#{1,6}\s*(.+?)\s*$/);
+        if (h) {
+          return <p key={i} className="font-semibold text-foreground mt-3 first:mt-0">{h[1]}</p>;
+        }
+        if (!line.trim()) return <div key={i} className="h-1" />;
+        return <p key={i} className="whitespace-pre-wrap">{line}</p>;
+      })}
+    </div>
+  );
+}
+
 function VerdictBadge({ verdict }: { verdict: string }) {
   if (verdict === "PASS")
     return <Badge variant="success" className="text-sm px-3 py-1"><CheckCircle2 className="h-4 w-4" /> PASS</Badge>;
@@ -90,8 +107,8 @@ export default function Report() {
               <CardContent>
                 <div className="flex gap-3">
                   <div className="h-8 w-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-medium shrink-0">AI</div>
-                  <div className="flex-1 rounded-lg border bg-muted/40 p-4 text-sm leading-relaxed whitespace-pre-wrap">
-                    {reportData.summary}
+                  <div className="flex-1 rounded-lg border bg-muted/40 p-4 text-sm leading-relaxed">
+                    <SummaryView text={reportData.summary} />
                   </div>
                 </div>
               </CardContent>

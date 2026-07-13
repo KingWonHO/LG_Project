@@ -14,6 +14,7 @@ export type AnalyzeResponse = {
   file_id: number;
   result_id: number;
   comp_model?: string | null;
+  trip_events?: { start: number; end: number; codes: number[] }[];
 };
 
 export type ParamDef = { display_name_ko?: string; unit?: string; category?: string; description?: string };

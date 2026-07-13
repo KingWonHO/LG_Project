@@ -5,6 +5,10 @@
 - 일반 컬럼: 노이즈 → NaN (median/max 등 통계에서 자동 제외 → 판정 왜곡 방지)
 - Trip(20)  : 노이즈 → 0 (잘못 튄 값이 트립으로 오검출되지 않도록)
 - Time(0)   : 제외 (시간축)
+
+★ 단, Trip_Code가 1~20인 행(=실제 트립 발생 구간)은 노이즈 필터링에서 통째로 제외한다.
+  실제 트립 순간에는 각 신호가 정상범위를 벗어나는 게 당연한 '실제 이상 이벤트'이므로,
+  이를 노이즈로 제거하면 트립 자체가 사라져 PASS로 오판정된다.
 프론트 columnSchema.ts 의 노이즈 규칙과 동일한 값을 사용한다.
 """
 
@@ -41,6 +45,10 @@ _DPS: dict[int, Bounds] = {9: (0, 255), 16: (0, 100), 17: (0, 100)}
 TIME_INDEX = 0
 TRIP_INDEX = 20
 
+# 실제 트립으로 인정하는 Trip_Code 범위 (이 구간의 행은 노이즈 필터링 제외)
+TRIP_CODE_MIN = 1
+TRIP_CODE_MAX = 20
+
 
 def _bounds(pos: int, is_dps: bool) -> Bounds | None:
     if pos in (9, 16, 17):
@@ -52,8 +60,16 @@ def clean_noise(df: pd.DataFrame, data_type: str | None = None) -> pd.DataFrame:
     """정상범위를 벗어난 값을 제거한 DataFrame을 반환한다 (컬럼 위치=인덱스 기준).
 
     data_type: "DPS"/"NODPS"/None (None이면 NODPS 기준으로 처리).
+    Trip_Code(1~20)가 있는 행은 실제 트립 구간이므로 노이즈 필터링에서 제외한다.
     """
     is_dps = data_type == "DPS"
+
+    # 실제 트립 구간 마스크: Trip_Code(위치 20)가 1~20인 행 → 노이즈 필터 제외
+    trip_active = pd.Series(False, index=df.index)
+    if df.shape[1] > TRIP_INDEX:
+        tc = pd.to_numeric(df.iloc[:, TRIP_INDEX], errors="coerce")
+        trip_active = tc.between(TRIP_CODE_MIN, TRIP_CODE_MAX)
+
     for pos in range(df.shape[1]):
         if pos == TIME_INDEX:
             continue
@@ -68,10 +84,12 @@ def clean_noise(df: pd.DataFrame, data_type: str | None = None) -> pd.DataFrame:
             mask = mask | (s < lo)
         if hi is not None:
             mask = mask | (s > hi)
+        # ★ 실제 트립 구간(Trip_Code 1~20)의 값은 노이즈가 아니므로 제거 대상에서 제외
+        mask = mask & ~trip_active
         if not mask.any():
             continue
         if pos == TRIP_INDEX:
-            df[col] = s.mask(mask, 0)     # Trip 노이즈 → 0 (오검출 방지)
+            df[col] = s.mask(mask, 0)     # Trip 노이즈 → 0 (오검출 방지, 단 트립행은 보존)
         else:
-            df[col] = s.where(~mask)      # 노이즈 → NaN
+            df[col] = s.where(~mask)      # 노이즈 → NaN (단 트립행은 보존)
     return df

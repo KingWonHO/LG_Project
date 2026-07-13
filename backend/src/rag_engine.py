@@ -119,7 +119,7 @@ def index_trip_codes_from_db() -> int:
 # ---------------------------------------------------------------------------
 
 
-def search_trip_codes(query: str, n_results: int = 5) -> list[dict]:
+def search_trip_codes(query: str, n_results: int = 5, trip_nos: list[int] | None = None) -> list[dict]:
     """분석 결과 쿼리와 유사한 Trip Code를 ChromaDB에서 검색.
 
     Args:
@@ -135,11 +135,17 @@ def search_trip_codes(query: str, n_results: int = 5) -> list[dict]:
     embedder = _get_embedder()
     query_embedding = embedder.encode([query], normalize_embeddings=True).tolist()
 
-    results = collection.query(
+    query_kwargs = dict(
         query_embeddings=query_embedding,
         n_results=min(n_results, collection.count()),
         include=["documents", "metadatas", "distances"],
     )
+    # 실제 발생한 Trip Code로만 한정 (의미 유사도만으로 무관한 트립이 딸려오는 것 방지)
+    if trip_nos:
+        query_kwargs["where"] = {"trip_no": {"$in": [int(x) for x in trip_nos]}}
+    results = collection.query(**query_kwargs)
+    if not results["ids"] or not results["ids"][0]:
+        return []
 
     return [
         {
@@ -216,6 +222,24 @@ def engineer_rules_count() -> int:
         return 0
 
 
+def _occurred_trip_codes(analysis_result: dict) -> list[int]:
+    """분석 결과에서 실제 발생한 Trip Code 목록을 추출한다 (trip_events 우선)."""
+    codes: set[int] = set()
+    for ev in (analysis_result.get("trip_events") or []):
+        for c in (ev.get("codes") or []):
+            try:
+                codes.add(int(c))
+            except (TypeError, ValueError):
+                pass
+    # 폴백: analysis에 trip_codes 리스트가 있으면 사용
+    for c in (analysis_result.get("trip_codes") or []):
+        try:
+            codes.add(int(c))
+        except (TypeError, ValueError):
+            pass
+    return sorted(codes)
+
+
 def build_rag_context(analysis_result: dict, n_results: int = 5) -> str:
     """분석 결과 → 이중 검색 후 LLM 주입용 컨텍스트 문자열 반환 (RAG-002).
 
@@ -234,11 +258,15 @@ def build_rag_context(analysis_result: dict, n_results: int = 5) -> str:
             lines.append(f"- {name}: {h['document'][:300]}")
         return "\n".join(lines)
 
-    # 2) 기존 Trip Code 지식 (fallback)
-    hits = search_trip_codes(query, n_results=n_results)
+    # 2) Trip Code 지식 — 실제 발생한 트립 코드로만 한정 (무관한 트립 딸려오기 방지)
+    occurred = _occurred_trip_codes(analysis_result)
+    if not occurred:
+        # 실제 발생 트립이 없으면 트립 지식은 붙이지 않는다 (관련 없는 내용 차단)
+        return ""
+    hits = search_trip_codes(query, n_results=len(occurred), trip_nos=occurred)
     if not hits:
         return ""
-    lines = ["[유사 Trip Code 참고 자료]"]
+    lines = ["[발생 Trip Code 참고 자료]"]
     for h in hits:
         lines.append(f"- {h['trip_key']} ({h['trip_name_ko']}): {h['document'][:200]}")
     return "\n".join(lines)

@@ -1,33 +1,34 @@
 # 다음 작업 리스트 (TODO)
 
-> LGE Internal Use Only · 최종 정리: 2026-06-21
+> LGE Internal Use Only · 최종 정리: 2026-07-13
 > 초기 연결 단계 완료. 아래는 다음에 진행할 항목.
 
 ## 현재 상태 요약
 
 - 프론트 ↔ 백엔드 연결: **완료** (업로드→분석→판정→이력→리포트 실데이터 end-to-end)
-- `/api/analyze` → src 분석 파이프라인 연결 완료 (parse→map→trip/baseline→verdict→result_builder)
-- 로컬 LLM(gemma3:4b) 리포트 요약 동작
-- 화면 상태 유지(사용자분석·리포트)
+- `/api/analyze` → src 분석 파이프라인 연결 완료 (parse→map→noise_filter→trip/baseline→verdict→result_builder)
+- 로컬 LLM(gemma3:4b, Ollama) 리포트 요약 + 분석 대화(`/api/chat`) 동작
+- RAG(rag_engine) 검색 + 리포트 참고자료 패널 + 수동 재인덱싱 동작
+- 이력 상세/삭제, 화면 상태 유지(사용자분석·리포트) 완료
 
-## 백엔드 미구현 모듈 (빈 스텁 → 담당자 구현 필요)
+## 남은 미구현 기능 (전용 모듈 없음 — 신규 구현 필요)
 
-| 모듈 | 기능 | 영향 |
-|------|------|------|
-| `src/rag_engine.py` | RAG-001/002 검색 | 리포트 "원인 후보" 근거 없음 → "RAG 결과 없음" 표시 |
-| `src/data_quality_checker.py` | ANA-005 품질 검사 | quality 항상 0 (missing/outliers 미산출) |
-| `src/report_generator.py` | RPT-002 PDF/HTML 리포트 | 리포트 파일 생성 불가 (현재 .md 다운로드만) |
-| `src/rule_manager.py` | ENG-002/004 Rule JSON | `/api/rules` 가 no-op |
-| `src/prompt_manager.py` | ENG-005 프롬프트 관리 | 현재 db_manager로 대체 동작 중 |
-| `src/baseline_manager.py` | ENG-003 baseline 관리 | 현재 db_manager로 대체 동작 중 |
-| `src/chart_viewer.py` | (백엔드 차트) | 미사용(차트는 프론트 recharts) |
+> 아래 항목은 과거 빈 스텁 파일(`data_quality_checker`/`report_generator`/`rule_manager`/`prompt_manager`/`baseline_manager`/`chart_viewer`)로 존재했으나 미구현 상태라 **삭제됨**. 구현 시 신규 모듈로 추가한다.
 
-## 프론트 측 다음 작업 (내 파트)
+| 기능 | 현재 영향 | 비고 |
+|------|-----------|------|
+| ANA-005 데이터 품질 검사 | quality 항상 0 (missing/outliers 미산출) | 신규 모듈 필요 |
+| RPT-002 PDF/HTML 리포트 | 리포트 파일 생성 불가 (현재 .md 다운로드만) | 신규 모듈 필요 |
+| ENG-004 Rule JSON 저장 | `/api/rules` PUT 가 no-op | GET은 `engineer_rules`가 처리 |
+| ENG-003 baseline / ENG-005 Prompt | 정상 동작 | `db_manager`가 직접 처리(별도 manager 불필요) |
+| 백엔드 차트 | 불필요 | 차트는 프론트 recharts 담당 |
 
-1. **트립코드 식별 표시** — analyze 응답에 발생 트립코드 번호 추가(main.py 연결 계층에서 df 고유값 추출 + DB 트립정의 조인) 후, 화면에 "코드 7 — FO Trip / 조치" 표시
-2. **이력 상세 조회** — `GET /api/history/{id}` 엔드포인트 추가 필요 → History 화면에서 과거 결과 클릭 시 상세/차트 복원
-3. 분석 진행 표시(대용량 파일 파싱 10~20초 소요) — 로딩 스피너/상태 메시지
-4. 에러 처리 — 잘못된 파일 업로드(400) 시 사용자 안내 토스트
+## 프론트 측 다음 작업
+
+1. 분석 진행 표시(대용량 파일 파싱 10~20초 소요) — 로딩 스피너/상태 메시지
+2. 에러 처리 — 잘못된 파일 업로드(400) 시 사용자 안내 토스트
+
+> 완료됨: 트립코드 식별 표시(코드→이름 매핑), 이력 상세 조회(`GET /api/history/{id}`).
 
 ## 운영/환경 이슈
 

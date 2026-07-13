@@ -1,7 +1,7 @@
 # 기능 명세서 (Functional Specification)
 
 > LGE Internal Use Only
-> 아키텍처: **React(shadcn/ui) 프론트 → FastAPI 백엔드 → Qwen LLM(로컬/사내)** · 최종 Docker 배포
+> 아키텍처: **React(shadcn/ui) 프론트 → FastAPI 백엔드 → 로컬 Ollama LLM(gemma3:4b)** · 최종 Docker 배포
 
 본 문서는 프로젝트의 기능 명세를 정의한다. 기능은 대분류별로 그룹화되며, 각 기능은 고유 ID와 코드 구현 위치를 가진다.
 코드 위치 표기: 프론트 = `frontend/src/...`, 백엔드 = `backend/...`
@@ -27,7 +27,7 @@
 | ANA-002 | 컬럼 자동 매핑 | 파일마다 다른 컬럼명을 표준 컬럼명으로 매핑한다. | `backend/src/column_mapper.py` |
 | ANA-003 | Trip Code 분석 | Trip_Code가 0이 아닌 데이터를 탐지하고 발생 횟수와 구간을 계산한다. | `backend/src/trip_analyzer.py` |
 | ANA-004 | 정상 기준 비교 | 정상 baseline과 업로드 데이터를 비교하여 관리 필요 여부를 판단한다. | `backend/src/baseline_analyzer.py` |
-| ANA-005 | 데이터 품질 이상 탐지 | 비정상적으로 큰 값, 누락값, 파싱 오류 가능성이 있는 데이터를 탐지한다. | `backend/src/data_quality_checker.py` |
+| ANA-005 | 데이터 품질 이상 탐지 | 비정상적으로 큰 값, 누락값, 파싱 오류 가능성이 있는 데이터를 탐지한다. | ⬜ 미구현 (`quality` 0 고정). 전처리 노이즈 제거는 `backend/src/noise_filter.py` |
 | ANA-006 | 최종 판정 생성 | Trip, baseline, 데이터 품질 결과를 종합하여 PASS/관리필요/FAIL을 결정한다. | `backend/src/verdict_engine.py` |
 | ANA-007 | 분석 결과 JSON 생성 | 화면 표시·차트·리포트용 표준 JSON 결과를 생성한다. | `backend/src/result_builder.py` |
 
@@ -36,10 +36,10 @@
 | 기능 ID | 기능명 | 기능설명 | 코드 구현 |
 |---------|--------|----------|-----------|
 | ENG-001 | 정상 데이터 업로드 | 엔지니어가 정상 baseline 생성을 위한 정상 데이터를 업로드한다. | `frontend/src/pages/EngineerAdmin.tsx` → `POST /api/analyze` |
-| ENG-002 | Trip Code 등록/수정 | Trip Code별 의미, 원인, 조치 방법을 등록하거나 수정한다. | `frontend EngineerAdmin.tsx` ↔ `backend/src/rule_manager.py` (`/api/trip-codes`) |
-| ENG-003 | 정상 기준 등록/수정 | Iqe, CoolingPower, Initial_Delay 등 주요 항목의 정상 기준을 등록하거나 수정한다. | `frontend EngineerAdmin.tsx` ↔ `backend/src/baseline_manager.py` (`/api/baseline`) |
-| ENG-004 | Rule JSON 등록/수정 | 이상 판단에 사용할 Rule JSON을 등록하거나 수정한다. | `frontend EngineerAdmin.tsx` ↔ `backend/src/rule_manager.py` (`/api/rules`) |
-| ENG-005 | Prompt 등록/수정 | Qwen 리포트 생성을 위한 프롬프트를 등록하거나 수정한다. | `frontend EngineerAdmin.tsx` ↔ `backend/src/prompt_manager.py` (`/api/prompt`) |
+| ENG-002 | Trip Code 등록/수정 | Trip Code별 의미, 원인, 조치 방법을 등록하거나 수정한다. | `frontend EngineerAdmin.tsx` ↔ `backend/src/db_manager.py` (`/api/trip-codes`) |
+| ENG-003 | 정상 기준 등록/수정 | Iqe, CoolingPower, Initial_Delay 등 주요 항목의 정상 기준을 등록하거나 수정한다. | `frontend EngineerAdmin.tsx` ↔ `backend/src/db_manager.py` (`/api/baseline`) |
+| ENG-004 | Rule JSON 등록/수정 | 이상 판단에 사용할 Rule JSON을 등록하거나 수정한다. | `frontend EngineerAdmin.tsx` ↔ `backend/src/engineer_rules.py`(GET) / PUT은 미구현 (`/api/rules`) |
+| ENG-005 | Prompt 등록/수정 | 리포트 생성을 위한 프롬프트를 등록하거나 수정한다. | `frontend EngineerAdmin.tsx` ↔ `backend/src/db_manager.py` (`/api/prompt`) |
 | ENG-006 | DB 업데이트 | 엔지니어가 수정한 Trip Code, Rule, Prompt, baseline 정보를 DB에 반영한다. | `backend/src/db_manager.py` |
 
 ## 4. DB 기능 (DB) — 백엔드
@@ -59,20 +59,21 @@
 | RAG-001 | 지식 데이터 저장 | Trip Code 설명, 조치 가이드, 과거 사례 내용을 임베딩 후 저장한다. | `backend/src/rag_engine.py` |
 | RAG-002 | 유사 근거 검색 | 분석 결과와 관련된 Trip Code 설명, Rule 설명, 과거 사례를 검색한다. | `backend/src/rag_engine.py` |
 
-## 6. LLM 기능 (LLM, Qwen) — 백엔드
+## 6. LLM 기능 (LLM, 로컬 Ollama) — 백엔드
 
 | 기능 ID | 기능명 | 기능설명 | 코드 구현 |
 |---------|--------|----------|-----------|
-| LLM-001 | 분석 요약 생성 | 분석 JSON과 RAG 검색 결과를 바탕으로 요약 문장을 생성한다. | `backend/src/llm_report.py` (Qwen) |
-| LLM-002 | 원인 후보 생성 | Trip Code, 이상 항목, baseline 이탈 내용을 바탕으로 원인 후보를 생성한다. | `backend/src/llm_report.py` (Qwen) |
-| LLM-003 | 조치 권고 생성 | 엔지니어 DB와 RAG 근거를 바탕으로 점검 항목과 조치 방향을 작성한다. | `backend/src/llm_report.py` (Qwen) |
+| LLM-001 | 분석 요약 생성 | 분석 JSON과 RAG 검색 결과를 바탕으로 요약 문장을 생성한다. | `backend/src/llm_report.py` (Ollama, 실패 시 rule-based 폴백) |
+| LLM 확장 | 분석 컨텍스트 대화 | 분석 결과 컨텍스트를 바탕으로 다중 턴 질의응답한다. | `backend/src/llm_chat.py` (`/api/chat`) |
+| LLM-002 | 원인 후보 생성 | Trip Code, 이상 항목, baseline 이탈 내용을 바탕으로 원인 후보를 생성한다. | ⬜ 미구현 (현재 LLM-001 요약에 포함) |
+| LLM-003 | 조치 권고 생성 | 엔지니어 DB와 RAG 근거를 바탕으로 점검 항목과 조치 방향을 작성한다. | ⬜ 미구현 (현재 LLM-001 요약에 포함) |
 
 ## 7. 리포트 기능 (RPT) — 프론트 + 백엔드
 
 | 기능 ID | 기능명 | 기능설명 | 코드 구현 |
 |---------|--------|----------|-----------|
 | RPT-001 | 리포트 화면 출력 | 분석 요약, Trip 분석, 이상 항목, 원인 후보, 조치 권고를 화면에 표시한다. | `frontend/src/pages/Report.tsx` → `POST /api/report` |
-| RPT-002 | 리포트 파일 생성 | 분석 결과를 HTML 또는 PDF 파일로 생성한다. | `backend/src/report_generator.py` |
+| RPT-002 | 리포트 파일 생성 | 분석 결과를 HTML 또는 PDF 파일로 생성한다. | ⬜ 미구현 (현재 Markdown 다운로드만) |
 
 ## 8. 관리 기능 (ADM) — 프론트
 
@@ -83,4 +84,4 @@
 
 ---
 
-_최종 수정: 2026-06-18_
+_최종 수정: 2026-07-13_

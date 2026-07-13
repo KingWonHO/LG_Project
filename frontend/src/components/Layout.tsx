@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { BarChart3, FileText, LogOut, ServerCrash, X } from "lucide-react";
+import { BarChart3, FileText, LogOut, ServerCrash, X, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +43,9 @@ export default function Layout() {
         <nav className="flex flex-col gap-1 px-3">
           <NavLink to="/" end className={link}><BarChart3 className="h-4 w-4" /> 사용자 분석</NavLink>
           <NavLink to="/report" className={link}><FileText className="h-4 w-4" /> 리포트</NavLink>
+          {role === "engineer" && (
+            <NavLink to="/engineer" className={link}><Wrench className="h-4 w-4" /> 엔지니어 관리</NavLink>
+          )}
         </nav>
 
         <div className="mt-3 flex-1 min-h-0 flex flex-col border-t pt-3">

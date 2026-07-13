@@ -28,11 +28,13 @@
 frontend/src/
 ├── main.tsx / App.tsx        # 진입 + 라우팅
 ├── index.css                 # Tailwind + shadcn 테마 변수(HSL)
-├── context.tsx               # 역할(user/engineer) 상태 + 접근코드
+├── context.tsx               # 역할(user/engineer) 상태 + 접근코드 + 화면 상태 유지
+├── lib/api.ts                # FastAPI(/api) fetch 래퍼
+├── lib/parseFile.ts          # 업로드 CSV/XLSX 클라 파싱
+├── lib/columnSchema.ts       # column_index → canonical 컬럼명 매핑(trip_case.json 번들)
 ├── lib/utils.ts              # cn() 헬퍼
-├── lib/mock.ts               # 더미 데이터 (→ 추후 API 호출로 교체)
 ├── components/Layout.tsx     # 사이드바 + 역할별 네비 (ADM-001)
-├── components/ui/            # shadcn 컴포넌트 (button/card/badge/tabs/select/input/separator)
+├── components/ui/            # shadcn 컴포넌트 (button/card/badge/tabs/select/input)
 └── pages/                    # 화면별 컴포넌트
 ```
 
@@ -100,7 +102,7 @@ frontend/src/
 
 ## 5. shadcn 컴포넌트 (`components/ui/`)
 
-button, card, badge, tabs, select, input, separator. 추가 필요 시:
+button, card, badge, tabs, select, input. 추가 필요 시:
 
 ```bash
 npx shadcn@latest add dialog dropdown-menu table toast
@@ -110,12 +112,12 @@ npx shadcn@latest add dialog dropdown-menu table toast
 
 ---
 
-## 6. 백엔드 연동 가이드 (다음 단계)
+## 6. 백엔드 연동
 
-1. `lib/api.ts` 추가 — `fetch` 래퍼 (`VITE_API_BASE` 환경변수, 기본 `/api`).
-2. 각 페이지의 `lib/mock.ts` 사용부를 API 호출로 교체.
-3. 개발 시 CORS: 백엔드 `.env`의 `CORS_ORIGINS=http://localhost:5173`. 배포 시 nginx가 `/api`를 backend로 프록시.
+- `lib/api.ts` — `fetch` 래퍼(기본 `/api`). 모든 페이지가 실제 `/api/*` 엔드포인트를 호출한다(더미 데이터 `mock.ts`는 제거됨).
+- 개발 시 vite 프록시가 `/api` → `http://localhost:8000` 로 전달. 백엔드 `.env`의 `CORS_ORIGINS=http://localhost:5173`.
+- 배포 시 nginx가 `/api`를 backend로 프록시.
 
 ---
 
-_최종 수정: 2026-06-18_
+_최종 수정: 2026-07-13_
